@@ -6,7 +6,10 @@ import java.awt.Color;
  * Dark Theme - Modern dark color scheme for code review
  */
 public class DarkTheme implements Theme {
-    
+
+    /** Canonical name used for persistence. */
+    public static final String THEME_NAME = "Dark";
+
     // Main colors
     private static final Color BACKGROUND = new Color(30, 30, 35);
     private static final Color FOREGROUND = new Color(230, 230, 235);
@@ -138,7 +141,7 @@ public class DarkTheme implements Theme {
     
     @Override
     public String getName() {
-        return "Dark";
+        return THEME_NAME;
     }
 }
 

@@ -19,13 +19,13 @@ public class ThemeManager {
     private static ThemeManager instance;
     private Theme currentTheme;
     private float dpiScale = 1.0f;
-    private boolean lafInitialized = false; // Track if Look and Feel is already set
-    private boolean fontsInitialized = false; // Track if fonts have been set (expensive operation)
+    private boolean lafInitialized = false;
+    private boolean fontsInitialized = false;
+    private final ThemePreferences themePreferences = new ThemePreferences();
 
     private ThemeManager() {
         calculateDpiScale();
-        currentTheme = new DarkTheme();
-        // Initialize theme immediately so first switch is fast
+        currentTheme = resolveTheme(themePreferences.load(DarkTheme.THEME_NAME));
         applyTheme();
     }
     
@@ -174,13 +174,26 @@ public class ThemeManager {
     }
     
     /**
-     * Switch to a different theme
+     * Switch to a different theme and persist the choice.
+     *
+     * @param theme the theme to apply
      */
     public void setTheme(Theme theme) {
         this.currentTheme = theme;
+        themePreferences.save(theme.getName());
         applyTheme();
     }
-    
+
+    /**
+     * Resolves a theme instance from a persisted name, defaulting to {@link DarkTheme}.
+     *
+     * @param name the theme name to resolve
+     * @return the matching {@link Theme} implementation
+     */
+    private Theme resolveTheme(String name) {
+        return LightTheme.THEME_NAME.equals(name) ? new LightTheme() : new DarkTheme();
+    }
+
     /**
      * Switch to light theme
      */

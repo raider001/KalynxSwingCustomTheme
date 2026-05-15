@@ -7,6 +7,9 @@ import java.awt.Color;
  */
 public class LightTheme implements Theme {
 
+    /** Canonical name used for persistence. */
+    public static final String THEME_NAME = "Light";
+
     // Main colors - Warmer tones
     private static final Color BACKGROUND = new Color(252, 250, 245);
     private static final Color FOREGROUND = new Color(35, 30, 25);
@@ -138,7 +141,7 @@ public class LightTheme implements Theme {
 
     @Override
     public String getName() {
-        return "Light";
+        return THEME_NAME;
     }
 }
 
