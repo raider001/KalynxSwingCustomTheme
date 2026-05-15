@@ -76,6 +76,10 @@ public class ThemedFrame extends JFrame {
         windowPanel.setBorder(BorderFactory.createLineBorder(
             themeManager.getCurrentTheme().getBorderColor(), 1));
 
+        themeManager.addThemeChangeListener(() ->
+            windowPanel.setBorder(BorderFactory.createLineBorder(
+                themeManager.getCurrentTheme().getBorderColor(), 1)));
+
         // Add custom title bar
         titleBar = new CustomTitleBar(this, title);
         windowPanel.add(titleBar, BorderLayout.NORTH);

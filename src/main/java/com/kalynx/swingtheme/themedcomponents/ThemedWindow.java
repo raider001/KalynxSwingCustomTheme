@@ -30,6 +30,9 @@ public class ThemedWindow extends JWindow {
         contentPanel = new ThemedPanel(new MigLayout("insets 6", "[]", "[]"));
         contentPanel.setBorder(BorderFactory.createLineBorder(
             themeManager.getCurrentTheme().getBorderColor(), 1));
+        themeManager.addThemeChangeListener(() ->
+            contentPanel.setBorder(BorderFactory.createLineBorder(
+                themeManager.getCurrentTheme().getBorderColor(), 1)));
 
         add(contentPanel);
     }

@@ -12,6 +12,7 @@ public interface Theme {
     Color getForegroundColor();
     Color getSecondaryTextColor();  // muted text for subtitles / labels
     Color getAccentColor();
+    Color getSecondaryAccentColor();
 
     // Component colors
     Color getButtonBackground();
@@ -19,10 +20,18 @@ public interface Theme {
     Color getInputBackground();
     Color getBorderColor();
 
+    // Status colors
+    Color getSuccessColor();
+    Color getWarningColor();
+    Color getErrorColor();
+    Color getInfoColor();
+
     // Semantic colors for code review
     Color getApprovedColor();
+    Color getPendingColor();
     Color getChangesRequestedColor();
-    
+    Color getCommentColor();
+
     // Diff colors (used for line background highlights in the diff view)
     Color getAddedLineColor();
     Color getRemovedLineColor();

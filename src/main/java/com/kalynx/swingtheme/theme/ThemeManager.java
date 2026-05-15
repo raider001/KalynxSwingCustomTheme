@@ -1,5 +1,7 @@
 package com.kalynx.swingtheme.theme;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,6 +24,25 @@ public class ThemeManager {
     private boolean lafInitialized = false;
     private boolean fontsInitialized = false;
     private final ThemePreferences themePreferences = new ThemePreferences();
+    private final List<Runnable> themeChangeListeners = new ArrayList<>();
+
+    /**
+     * Registers a listener that is notified on the EDT immediately after every theme change.
+     *
+     * @param listener the callback to invoke when the theme changes
+     */
+    public void addThemeChangeListener(Runnable listener) {
+        themeChangeListeners.add(listener);
+    }
+
+    /**
+     * Removes a previously registered theme-change listener.
+     *
+     * @param listener the listener to remove
+     */
+    public void removeThemeChangeListener(Runnable listener) {
+        themeChangeListeners.remove(listener);
+    }
 
     private ThemeManager() {
         calculateDpiScale();
@@ -82,6 +103,8 @@ public class ThemeManager {
                     window.repaint();
                 }
             }
+
+            SwingUtilities.invokeLater(() -> themeChangeListeners.forEach(Runnable::run));
 
         } catch (Exception e) {
             LOGGER.error("Failed to apply theme", e);
