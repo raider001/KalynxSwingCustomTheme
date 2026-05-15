@@ -1,0 +1,67 @@
+package com.kalynx.swingtheme.themedcomponents;
+
+import java.io.Serial;
+
+import com.kalynx.swingtheme.theme.Theme;
+import com.kalynx.swingtheme.theme.ThemeManager;
+
+import javax.swing.*;
+import javax.swing.border.TitledBorder;
+import java.awt.*;
+
+/**
+ * A JPanel that automatically applies and updates theme colors
+ * Colors are queried on-demand during paint for automatic theme updates
+ */
+public class ThemedPanel extends JPanel {
+    @Serial
+    private static final long serialVersionUID = 1L;
+    
+    protected transient final ThemeManager themeManager;
+    
+    public ThemedPanel() {
+        super();
+        this.themeManager = ThemeManager.getInstance();
+        setOpaque(true);
+    }
+    
+    public ThemedPanel(LayoutManager layout) {
+        super(layout);
+        this.themeManager = ThemeManager.getInstance();
+        setOpaque(true);
+    }
+
+    public ThemedPanel(boolean isDoubleBuffered) {
+        super(isDoubleBuffered);
+        this.themeManager = ThemeManager.getInstance();
+        setOpaque(true);
+    }
+
+    public ThemedPanel(LayoutManager layout, boolean isDoubleBuffered) {
+        super(layout, isDoubleBuffered);
+        this.themeManager = ThemeManager.getInstance();
+        setOpaque(true);
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+        // Query theme colors on demand - no caching needed
+        // Null check for safety during initialization
+        if (themeManager != null) {
+            Theme theme = themeManager.getCurrentTheme();
+            setBackground(theme.getBackgroundColor());
+            setForeground(theme.getForegroundColor());
+
+            // Automatically update titled borders with current theme
+            if (getBorder() instanceof TitledBorder titledBorder) {
+                String title = titledBorder.getTitle();
+                if (title != null) {
+                    setBorder(ThemedTitledBorder.create(title));
+                }
+            }
+        }
+
+        super.paintComponent(g);
+    }
+}
+
