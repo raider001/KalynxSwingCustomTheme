@@ -107,6 +107,15 @@ public class ThemedMenuItem extends JMenuItem {
 
         super.paint(g);
     }
+
+    /**
+     * Registers a {@link Runnable} as an action listener, ignoring the action event.
+     *
+     * @param action the action to run when this menu item is selected
+     */
+    public void addActionListener(Runnable action) {
+        addActionListener(_ -> action.run());
+    }
 }
 
 

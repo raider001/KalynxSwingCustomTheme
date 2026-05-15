@@ -10,7 +10,6 @@ import java.awt.event.MouseEvent;
 
 /**
  * ThemedButton - A modern, flat, theme-aware button component
- *
  * Clean implementation that calculates colors on-demand during paint
  * without permanently modifying component state.
  */
@@ -96,6 +95,15 @@ public class ThemedButton extends JButton {
 
     public boolean isAccentStyle() {
         return useAccentStyle;
+    }
+
+    /**
+     * Registers a {@link Runnable} as an action listener, ignoring the action event.
+     *
+     * @param action the action to run when this button is clicked
+     */
+    public void addActionListener(Runnable action) {
+        addActionListener(_ -> action.run());
     }
 
     @Override

@@ -58,7 +58,7 @@ public class ThemedOptionPane extends JDialog {
         buttonPanel.setLayout(new MigLayout("insets 10 20 20 20", "[grow][]", "[]"));
 
         ThemedButton okButton = new ThemedButton("OK");
-        okButton.addActionListener(ignored -> dispose());
+        okButton.addActionListener(this::dispose);
         buttonPanel.add(okButton, "cell 1 0, width 80!");
 
         contentPanel.add(buttonPanel, "cell 0 2, grow");

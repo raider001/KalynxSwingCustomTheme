@@ -117,6 +117,15 @@ public class QuickButton extends JButton {
     }
 
     /**
+     * Registers a {@link Runnable} as an action listener, ignoring the action event.
+     *
+     * @param action the action to run when this button is clicked
+     */
+    public void addActionListener(Runnable action) {
+        addActionListener(_ -> action.run());
+    }
+
+    /**
      * Set font size (fluent API)
      */
     public QuickButton setFontSize(int size) {

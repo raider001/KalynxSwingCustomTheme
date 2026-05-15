@@ -84,6 +84,15 @@ public class ThemedCheckBox extends JCheckBox {
         model = null;
         binding = null;
     }
+
+    /**
+     * Registers a {@link Runnable} as an action listener, ignoring the action event.
+     *
+     * @param action the action to run when this checkbox is toggled
+     */
+    public void addActionListener(Runnable action) {
+        addActionListener(_ -> action.run());
+    }
 }
 
 

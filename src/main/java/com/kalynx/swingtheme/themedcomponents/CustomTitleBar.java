@@ -48,7 +48,7 @@ public class CustomTitleBar extends ThemedPanel {
                 .setTooltip("Menu");
         hamburgerBtn.setVisible(true);
         hamburgerBtn.setOpaque(true);
-        hamburgerBtn.addActionListener(_ -> slideOutMenu.toggle());
+        hamburgerBtn.addActionListener(slideOutMenu::toggle);
         titlePanel.add(hamburgerBtn);
         titlePanel.add(Box.createHorizontalStrut(themeManager.scale(10)));
 
@@ -61,7 +61,7 @@ public class CustomTitleBar extends ThemedPanel {
         buttonPanel.setOpaque(false);
 
         themeToggleBtn = createThemeToggleButton();
-        themeToggleBtn.addActionListener(_ -> {
+        themeToggleBtn.addActionListener(() -> {
             if (themeManager.getCurrentTheme().getName().equals("Dark")) {
                 themeManager.setLightTheme();
             } else {
@@ -71,10 +71,10 @@ public class CustomTitleBar extends ThemedPanel {
         });
 
         QuickButton minimizeBtn = new QuickButton(new MinimizeIcon()).setTooltip("Minimize");
-        minimizeBtn.addActionListener(_ -> parentFrame.setState(Frame.ICONIFIED));
+        minimizeBtn.addActionListener(() -> parentFrame.setState(Frame.ICONIFIED));
 
         QuickButton maximizeBtn = new QuickButton(new MaximizeIcon()).setTooltip("Maximize");
-        maximizeBtn.addActionListener(_ -> {
+        maximizeBtn.addActionListener(() -> {
             if (parentFrame.getExtendedState() == Frame.MAXIMIZED_BOTH) {
                 parentFrame.setExtendedState(Frame.NORMAL);
             } else {
@@ -85,7 +85,7 @@ public class CustomTitleBar extends ThemedPanel {
         QuickButton closeBtn = new QuickButton(new CloseIcon())
                 .setCustomHover(new Color(232, 17, 35), Color.WHITE)
                 .setTooltip("Close");
-        closeBtn.addActionListener(_ -> { parentFrame.dispose(); System.exit(0); });
+        closeBtn.addActionListener(() -> { parentFrame.dispose(); System.exit(0); });
 
         buttonPanel.add(themeToggleBtn);
         buttonPanel.add(minimizeBtn);
@@ -116,7 +116,7 @@ public class CustomTitleBar extends ThemedPanel {
         titleLabel.setBorder(BorderFactory.createEmptyBorder(0, themeManager.scale(10), 0, 0));
 
         QuickButton closeBtn = new QuickButton(new CloseIcon()).setTooltip("Close");
-        closeBtn.addActionListener(_ -> window.dispose());
+        closeBtn.addActionListener(window::dispose);
 
         add(titleLabel, BorderLayout.WEST);
         add(closeBtn,   BorderLayout.EAST);

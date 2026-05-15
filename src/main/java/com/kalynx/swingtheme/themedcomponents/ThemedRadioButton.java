@@ -82,5 +82,14 @@ public class ThemedRadioButton extends JRadioButton {
         binding = null;
         valueWhenSelected = null;
     }
+
+    /**
+     * Registers a {@link Runnable} as an action listener, ignoring the action event.
+     *
+     * @param action the action to run when this radio button is selected
+     */
+    public void addActionListener(Runnable action) {
+        addActionListener(_ -> action.run());
+    }
 }
 

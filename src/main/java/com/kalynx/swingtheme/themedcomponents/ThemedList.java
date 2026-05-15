@@ -11,8 +11,9 @@ import java.util.Vector;
 import java.util.function.Consumer;
 
 /**
- * A JList that automatically applies and updates theme colors
- * Colors are queried on-demand during paint for automatic theme updates
+ * A JList that automatically applies and updates theme colors.
+ * Colors are applied once per {@link #paint} cycle without triggering
+ * additional repaints or allocating objects on every frame.
  */
 public class ThemedList<T> extends JList<T> {
     @Serial
@@ -20,6 +21,9 @@ public class ThemedList<T> extends JList<T> {
     
     protected transient final ThemeManager themeManager;
     
+    private transient Font cachedFont;
+    private transient int cachedFontSize = -1;
+
     public ThemedList() {
         super();
         this.themeManager = ThemeManager.getInstance();
@@ -48,8 +52,7 @@ public class ThemedList<T> extends JList<T> {
         setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         // Don't set fixed cell height - let it size to content
         setFixedCellHeight(-1);
-        // Calculate optimal row height based on font metrics
-        setFont(new Font("Segoe UI", Font.PLAIN, themeManager.scale(12)));
+        setFont(resolveFont());
     }
 
     /**
@@ -70,14 +73,29 @@ public class ThemedList<T> extends JList<T> {
     }
 
     @Override
-    protected void paintComponent(Graphics g) {
-        // Query theme colors on demand - no caching needed
+    public void paint(Graphics g) {
         Theme theme = themeManager.getCurrentTheme();
-        setBackground(theme.getBackgroundColor());
-        setForeground(theme.getForegroundColor());
-        setFont(new Font("Segoe UI", Font.PLAIN, themeManager.scale(12)));
+        Color previousBackground = getBackground();
+        Color previousForeground = getForeground();
+        Font  previousFont       = getFont();
 
-        super.paintComponent(g);
+        super.setBackground(theme.getBackgroundColor());
+        super.setForeground(theme.getForegroundColor());
+        super.setFont(resolveFont());
+
+        super.paint(g);
+
+        super.setBackground(previousBackground);
+        super.setForeground(previousForeground);
+        super.setFont(previousFont);
+    }
+
+    private Font resolveFont() {
+        int size = themeManager.scale(12);
+        if (cachedFont == null || cachedFontSize != size) {
+            cachedFont     = new Font("Segoe UI", Font.PLAIN, size);
+            cachedFontSize = size;
+        }
+        return cachedFont;
     }
 }
-

@@ -51,19 +51,19 @@ public class ThemedConfirmDialog extends JDialog {
         if (messageOnly) {
             buttonPanel.setLayout(new MigLayout("insets 10 20 20 20", "[grow][]", "[]"));
             ThemedButton okButton = new ThemedButton("OK");
-            okButton.addActionListener(_ -> dispose());
+            okButton.addActionListener(this::dispose);
             buttonPanel.add(okButton, "cell 1 0, width 80!");
         } else {
             buttonPanel.setLayout(new MigLayout("insets 10 20 20 20", "[grow][]10[]", "[]"));
             ThemedButton yesButton = new ThemedButton("Yes");
             ThemedButton noButton = new ThemedButton("No");
 
-            yesButton.addActionListener(_ -> {
+            yesButton.addActionListener(() -> {
                 confirmed = true;
                 dispose();
             });
 
-            noButton.addActionListener(_ -> {
+            noButton.addActionListener(() -> {
                 confirmed = false;
                 dispose();
             });

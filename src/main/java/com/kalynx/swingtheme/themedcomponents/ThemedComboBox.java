@@ -232,4 +232,13 @@ public class ThemedComboBox<T> extends JComboBox<T> {
         optionsModel = null;
         binding = null;
     }
+
+    /**
+     * Registers a {@link Runnable} as an action listener, ignoring the action event.
+     *
+     * @param action the action to run when the selection changes
+     */
+    public void addActionListener(Runnable action) {
+        addActionListener(_ -> action.run());
+    }
 }

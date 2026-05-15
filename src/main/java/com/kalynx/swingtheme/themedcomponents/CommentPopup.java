@@ -53,10 +53,10 @@ public class CommentPopup extends ThemedPopupDialog {
         buttonPanel.setOpaque(false);
 
         ThemedButton cancelButton = new ThemedButton("Cancel");
-        cancelButton.addActionListener(_ -> dispose());
+        cancelButton.addActionListener(this::dispose);
 
         ThemedButton submitButton = new ThemedButton("Add Comment");
-        submitButton.addActionListener(_ -> {
+        submitButton.addActionListener(() -> {
             if (submitCallback != null) {
                 submitCallback.actionPerformed(null);
             }

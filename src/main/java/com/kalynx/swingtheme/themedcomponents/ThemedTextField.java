@@ -218,4 +218,14 @@ public class ThemedTextField extends JTextField {
         model = null;
         textBinding = null;
     }
+
+    /**
+     * Registers a {@link Runnable} as an action listener, ignoring the action event.
+     * The action fires when the user presses Enter in this field.
+     *
+     * @param action the action to run on Enter
+     */
+    public void addActionListener(Runnable action) {
+        addActionListener(_ -> action.run());
+    }
 }
