@@ -1,6 +1,5 @@
 package com.kalynx.swingtheme.themedcomponents;
 
-import com.kalynx.swingtheme.themedcomponents.CommentAnnotation;
 import com.kalynx.swingtheme.theme.Theme;
 import com.kalynx.swingtheme.theme.ThemeManager;
 
@@ -107,9 +106,9 @@ public class AnnotatedScrollPane extends ThemedScrollPane {
     private void pushChangeAnnotations() {
         Theme theme = themeManager.getCurrentTheme();
         List<AnnotatedScrollBar.ChangeBlock> blocks = new ArrayList<>();
-        addChangeBlocks(blocks, cachedAdded, theme.getAddedLineColor());
-        addChangeBlocks(blocks, cachedRemoved, theme.getRemovedLineColor());
-        addChangeBlocks(blocks, cachedModified, theme.getModifiedLineColor());
+        addChangeBlocks(blocks, cachedAdded, theme.getAddedAnnotationColor());
+        addChangeBlocks(blocks, cachedRemoved, theme.getRemovedAnnotationColor());
+        addChangeBlocks(blocks, cachedModified, theme.getModifiedAnnotationColor());
         annotatedScrollBar.setChangeBlocks(cachedTotalLines, blocks);
     }
 

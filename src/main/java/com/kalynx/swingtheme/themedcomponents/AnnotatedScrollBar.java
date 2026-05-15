@@ -1,5 +1,6 @@
 package com.kalynx.swingtheme.themedcomponents;
 
+  import com.kalynx.swingtheme.theme.Theme;
   import com.kalynx.swingtheme.theme.ThemeManager;
 
 import java.awt.*;
@@ -129,10 +130,11 @@ public class AnnotatedScrollBar extends ThemedScrollBar {
     }
 
     private Color resolveCommentColor(CommentIndicatorType type) {
+        Theme theme = ThemeManager.getInstance().getCurrentTheme();
         return switch (type) {
-            case OBSERVATION -> new Color(33, 150, 243);
-            case NEEDS_RESOLUTION -> new Color(255, 152, 0);
-            case RESOLVED -> new Color(76, 175, 80);
+            case OBSERVATION -> theme.getObservationAnnotationColor();
+            case NEEDS_RESOLUTION -> theme.getNeedsResolutionAnnotationColor();
+            case RESOLVED -> theme.getResolvedAnnotationColor();
         };
     }
 }
