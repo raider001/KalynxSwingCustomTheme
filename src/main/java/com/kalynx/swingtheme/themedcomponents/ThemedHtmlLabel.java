@@ -4,11 +4,17 @@ import com.kalynx.swingtheme.theme.Theme;
 import com.kalynx.swingtheme.theme.ThemeManager;
 import com.kalynx.swingtheme.utils.HtmlThemeHelper;
 
+import java.awt.Container;
+import java.awt.Dimension;
+
 /**
  * A label that renders HTML content with theme-aware styling.
  * Colors, fonts, and code/pre styling are injected via {@link HtmlThemeHelper}
  * and refreshed automatically whenever the active theme changes. The label
  * itself stays non-opaque so it blends with its parent container.
+ * <p>
+ * The preferred size calculation constrains the label to its parent's width so
+ * that HTML content reflows and wraps correctly when the container is resized.
  */
 public class ThemedHtmlLabel extends ThemedLabel {
 
@@ -52,5 +58,27 @@ public class ThemedHtmlLabel extends ThemedLabel {
         }
         Theme theme = themeManager.getCurrentTheme();
         setText(HtmlThemeHelper.applyThemeStyles(rawHtmlContent, theme));
+    }
+
+    /**
+     * Overrides preferred size so that when a parent container constrains the
+     * available width, the HTML renderer reflows content and wraps text at that
+     * width rather than reporting the full unwrapped content width.
+     *
+     * @return the preferred size, clamped to the parent's current width when available
+     */
+    @Override
+    public Dimension getPreferredSize() {
+        Dimension size = super.getPreferredSize();
+        Container parent = getParent();
+        if (parent != null && parent.getWidth() > 0) {
+            int maxWidth = parent.getWidth();
+            if (size.width > maxWidth) {
+                setSize(maxWidth, Short.MAX_VALUE);
+                size = super.getPreferredSize();
+                size.width = maxWidth;
+            }
+        }
+        return size;
     }
 }
