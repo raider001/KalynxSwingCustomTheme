@@ -5,6 +5,7 @@ import java.io.Serial;
 import com.kalynx.swingtheme.theme.ScalableComponent;
 import com.kalynx.swingtheme.theme.Theme;
 import com.kalynx.swingtheme.theme.ThemeManager;
+import com.kalynx.swingtheme.theme.WindowLockManager;
 import com.kalynx.swingtheme.theme.icons.*;
 
 import javax.swing.*;
@@ -24,12 +25,13 @@ public class CustomTitleBar extends ThemedPanel {
     private transient final ThemeManager themeManager;
     private final JLabel titleLabel;
     private final QuickButton themeToggleBtn;
+    private final QuickButton lockBtn;
     private ThemedPanel buttonPanel;
     private Point initialClick;
     private final SlideOutMenu slideOutMenu;
 
     /**
-     * Full title bar for a JFrame: hamburger menu, theme toggle, minimize, maximize, close.
+     * Full title bar for a JFrame: hamburger menu, theme toggle, lock, minimize, maximize, close.
      */
     public CustomTitleBar(JFrame parentFrame, String title) {
         this.themeManager = ThemeManager.getInstance();
@@ -70,6 +72,8 @@ public class CustomTitleBar extends ThemedPanel {
             updateThemeToggleButton();
         });
 
+        lockBtn = createLockButton();
+
         QuickButton minimizeBtn = new QuickButton(new MinimizeIcon()).setTooltip("Minimize");
         minimizeBtn.addActionListener(() -> parentFrame.setState(Frame.ICONIFIED));
 
@@ -87,6 +91,7 @@ public class CustomTitleBar extends ThemedPanel {
                 .setTooltip("Close");
         closeBtn.addActionListener(() -> { parentFrame.dispose(); System.exit(0); });
 
+        buttonPanel.add(lockBtn);
         buttonPanel.add(themeToggleBtn);
         buttonPanel.add(minimizeBtn);
         buttonPanel.add(maximizeBtn);
@@ -96,15 +101,19 @@ public class CustomTitleBar extends ThemedPanel {
         add(buttonPanel, BorderLayout.EAST);
 
         makeDraggable(parentFrame);
+
+        WindowLockManager.getInstance().registerMainFrame(parentFrame);
     }
 
     /**
      * Compact title bar for a dialog or any Window: title + close only, no menu/min/max.
+     * Automatically registers the window with {@link WindowLockManager}.
      */
     public CustomTitleBar(Window window, String title) {
         this.themeManager = ThemeManager.getInstance();
         this.slideOutMenu = null;
         this.themeToggleBtn = null;
+        this.lockBtn = null;
 
         setLayout(new BorderLayout());
         setPreferredSize(new Dimension(0, themeManager.scale(40)));
@@ -122,6 +131,8 @@ public class CustomTitleBar extends ThemedPanel {
         add(closeBtn,   BorderLayout.EAST);
 
         makeDraggable(window);
+
+        WindowLockManager.getInstance().registerChildWindow(window);
     }
 
     private void makeDraggable(Window window) {
@@ -134,17 +145,37 @@ public class CustomTitleBar extends ThemedPanel {
                 if (initialClick != null) {
                     int x = window.getLocation().x + e.getX() - initialClick.x;
                     int y = window.getLocation().y + e.getY() - initialClick.y;
-                    window.setLocation(x, y);
+                    Point snapped = WindowLockManager.getInstance().applySnap(window, x, y);
+                    WindowLockManager.getInstance().moveWindowWithLock(window, snapped.x, snapped.y);
                 }
             }
         });
     }
 
+    private QuickButton createLockButton() {
+        WindowLockManager lockManager = WindowLockManager.getInstance();
+        QuickButton button = new QuickButton(new LockIcon(lockManager.isLocked()))
+            .setAccentHover()
+            .setTooltip(lockManager.isLocked() ? "Unlock Windows" : "Lock Windows");
+        button.addActionListener(() -> {
+            lockManager.setLocked(!lockManager.isLocked());
+            updateLockButton(button);
+        });
+        lockManager.addLockStateListener(() -> updateLockButton(button));
+        return button;
+    }
+
+    private void updateLockButton(QuickButton button) {
+        WindowLockManager lockManager = WindowLockManager.getInstance();
+        button.setIconPainter(new LockIcon(lockManager.isLocked()));
+        button.setToolTipText(lockManager.isLocked() ? "Unlock Windows" : "Lock Windows");
+        button.repaint();
+    }
+
     /**
      * Create theme toggle button with dynamic sun/moon icon
      */
-    private QuickButton createThemeToggleButton() {
-        QuickButton button = new QuickButton()
+    private QuickButton createThemeToggleButton() {        QuickButton button = new QuickButton()
             .setAccentHover()
             .setTooltip(getThemeToggleTooltip());
 
