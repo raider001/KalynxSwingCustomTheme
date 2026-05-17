@@ -2,10 +2,11 @@ package com.kalynx.swingtheme.theme;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.HierarchyEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -16,12 +17,11 @@ import java.util.WeakHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Singleton manager for two window-management features.
+ * Singleton manager for window-lock, auto-snap, resize-snap, and persisted
+ * window preferences.
  * <p>
  * <b>Window Lock</b>: When enabled, all registered child windows follow the
- * main frame whenever it is dragged via its title bar. Children are repositioned
- * in the same EDT call, before the main frame itself moves, so the OS compositor
- * sees all windows at their new positions simultaneously.
+ * main frame whenever it is dragged via its title bar.
  * <p>
  * <b>Auto-Snap</b>: {@link #applySnap} snaps a dragged window to the nearest
  * edge or aligned edge of any other registered window within
@@ -29,6 +29,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * <p>
  * <b>Resize Snap</b>: When a child window is resized, the moved edge snaps to
  * the nearest vertical or horizontal edge of any other registered window.
+ * <p>
+ * <b>Preferences</b>: Lock state, main-frame bounds, and each child window's
+ * size and position (stored as an offset relative to the main frame) are
+ * persisted via {@link WindowPreferencesManager} and restored automatically.
  * <p>
  * Usage:
  * <pre>
@@ -39,15 +43,26 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class WindowLockManager {
 
     private static final WindowLockManager INSTANCE = new WindowLockManager();
-    private static final int SNAP_DISTANCE = 12;
+    private static final int SNAP_DISTANCE      = 12;
+    private static final int SAVE_DEBOUNCE_MS   = 800;
 
     private JFrame mainFrame;
     private boolean locked = false;
 
-    private final Set<Window> children = new LinkedHashSet<>();
-    private final List<Runnable> lockStateListeners = new CopyOnWriteArrayList<>();
-    private final Map<Window, Rectangle> childLastBounds = Collections.synchronizedMap(new WeakHashMap<>());
-    private final Set<Window> snappingInProgress = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
+    private final Set<Window>            children              = new LinkedHashSet<>();
+    private final List<Runnable>         lockStateListeners     = new CopyOnWriteArrayList<>();
+    private final Map<Window, Rectangle> childLastBounds        =
+            Collections.synchronizedMap(new WeakHashMap<>());
+    private final Set<Window>            snappingInProgress     =
+            Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
+    private final Set<Window>            pendingPreferenceWindows =
+            Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
+    private final Set<Window>            applyingPreferences    =
+            Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
+
+    private Timer mainFrameSaveTimer;
+    private Timer childSaveTimer;
+    private Window pendingChildSave;
 
     private WindowLockManager() {}
 
@@ -61,29 +76,81 @@ public class WindowLockManager {
     }
 
     /**
-     * Registers the application's main frame.
+     * Registers the application's main frame. Restores the previously saved
+     * bounds (position + size) and lock state from user preferences.
      *
      * @param frame the main application frame
      */
     public void registerMainFrame(JFrame frame) {
         this.mainFrame = frame;
+
+        Rectangle saved = WindowPreferencesManager.loadMainFrameBounds();
+        if (saved != null) {
+            frame.setBounds(saved);
+        }
+
+        this.locked = WindowPreferencesManager.loadLockState();
+        notifyListeners();
+
+        frame.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentMoved(ComponentEvent e) {
+                scheduleMainFrameSave();
+            }
+
+            @Override
+            public void componentResized(ComponentEvent e) {
+                scheduleMainFrameSave();
+            }
+        });
+
+        frame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                WindowPreferencesManager.saveMainFrameBounds(frame.getBounds());
+            }
+        });
     }
 
     /**
-     * Registers a child window so it participates in window-lock and snap
-     * behaviour. The window deregisters itself automatically when closed.
+     * Registers a child window so it participates in window-lock, snap, and
+     * preference-persistence behaviour. The window deregisters itself
+     * automatically when closed.
      *
      * @param window the child window to register
      */
     public void registerChildWindow(Window window) {
         children.add(window);
+
         window.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                saveChildBounds(window);
+            }
+
             @Override
             public void windowClosed(WindowEvent e) {
                 children.remove(window);
                 childLastBounds.remove(window);
+                pendingPreferenceWindows.remove(window);
             }
         });
+
+        window.addHierarchyListener(e -> {
+            if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0
+                    && window.isShowing()
+                    && pendingPreferenceWindows.remove(window)) {
+                boolean canFade = supportsOpacity(window);
+                if (canFade) {
+                    window.setOpacity(0.0f);
+                }
+                applyChildPreferences(window);
+                if (canFade) {
+                    SwingUtilities.invokeLater(() -> window.setOpacity(1.0f));
+                }
+            }
+        });
+
         window.addComponentListener(new ComponentAdapter() {
             @Override
             public void componentShown(ComponentEvent e) {
@@ -91,20 +158,35 @@ public class WindowLockManager {
             }
 
             @Override
+            public void componentMoved(ComponentEvent e) {
+                if (window.isShowing()) {
+                    scheduleChildSave(window);
+                }
+            }
+
+            @Override
             public void componentResized(ComponentEvent e) {
                 snapResizedChild(window);
             }
         });
+
         childLastBounds.put(window, window.getBounds());
+
+        if (mainFrame != null
+                && WindowPreferencesManager.loadChildBounds(window.getClass().getName()) != null) {
+            pendingPreferenceWindows.add(window);
+        }
     }
 
     /**
-     * Enables or disables the window lock.
+     * Enables or disables the window lock. The new state is immediately
+     * persisted to user preferences.
      *
      * @param locked {@code true} to lock, {@code false} to unlock
      */
     public void setLocked(boolean locked) {
         this.locked = locked;
+        WindowPreferencesManager.saveLockState(locked);
         notifyListeners();
     }
 
@@ -138,10 +220,8 @@ public class WindowLockManager {
     /**
      * Moves {@code window} to ({@code x}, {@code y}). When the window lock is
      * active and {@code window} is the main frame, all registered child windows
-     * are moved by the same delta <em>first</em>, so that the OS compositor
-     * encounters them already at their new positions before the main frame itself
-     * moves. A {@link Toolkit#sync()} flush is issued afterward to push the
-     * native display buffer.
+     * are moved by the same delta first so they reposition alongside the main
+     * frame in the same EDT call.
      *
      * @param window the window to move
      * @param x      target screen x coordinate
@@ -152,7 +232,7 @@ public class WindowLockManager {
             int dx = x - window.getX();
             int dy = y - window.getY();
             if (dx != 0 || dy != 0) {
-                for (Window child : children) {
+                for (Window child : new ArrayList<>(children)) {
                     if (child.isShowing()) {
                         child.setLocation(child.getX() + dx, child.getY() + dy);
                     }
@@ -167,11 +247,7 @@ public class WindowLockManager {
      * Returns a (potentially snapped) screen position for a window being
      * dragged to ({@code x}, {@code y}). Each axis is snapped independently
      * to the closest candidate within {@value #SNAP_DISTANCE} pixels.
-     * Four snap types are checked per registered window per axis:
-     * adjacent-edge (side-by-side / stacked) and same-edge alignment.
-     * <p>
-     * Snapping is intentionally disabled when the dragging window is the main
-     * frame: only child windows snap to the main frame or to each other.
+     * Snapping is disabled for the main frame.
      *
      * @param dragging the window being dragged
      * @param x        proposed screen x coordinate
@@ -185,14 +261,13 @@ public class WindowLockManager {
         int dW = dragging.getWidth();
         int dH = dragging.getHeight();
 
-        int snapX = x;
-        int snapY = y;
+        int snapX    = x;
+        int snapY    = y;
         int closestX = SNAP_DISTANCE + 1;
         int closestY = SNAP_DISTANCE + 1;
 
         for (Window other : getOtherWindows(dragging)) {
             Rectangle r = other.getBounds();
-
             int d;
 
             d = Math.abs(x - (r.x + r.width));
@@ -223,6 +298,71 @@ public class WindowLockManager {
         return new Point(snapX, snapY);
     }
 
+    private boolean supportsOpacity(Window window) {
+        GraphicsConfiguration gc = window.getGraphicsConfiguration();
+        return gc != null && gc.getDevice()
+                .isWindowTranslucencySupported(GraphicsDevice.WindowTranslucency.TRANSLUCENT);
+    }
+
+    private void applyChildPreferences(Window window) {
+        if (mainFrame == null) {
+            return;
+        }
+        String key   = window.getClass().getName();
+        int[]  saved = WindowPreferencesManager.loadChildBounds(key);
+        if (saved == null) {
+            return;
+        }
+        int relX = saved[0], relY = saved[1], w = saved[2], h = saved[3];
+        if (w <= 0 || h <= 0) {
+            return;
+        }
+        Point     mainLoc   = mainFrame.getLocation();
+        Rectangle newBounds = new Rectangle(mainLoc.x + relX, mainLoc.y + relY, w, h);
+        applyingPreferences.add(window);
+        window.setBounds(newBounds);
+        applyingPreferences.remove(window);
+        childLastBounds.put(window, new Rectangle(newBounds));
+    }
+
+    private void saveChildBounds(Window window) {
+        if (mainFrame == null) {
+            return;
+        }
+        Point mainLoc = mainFrame.getLocation();
+        int relX = window.getX() - mainLoc.x;
+        int relY = window.getY() - mainLoc.y;
+        WindowPreferencesManager.saveChildBounds(
+                window.getClass().getName(), relX, relY,
+                window.getWidth(), window.getHeight());
+    }
+
+    private void scheduleMainFrameSave() {
+        if (mainFrameSaveTimer == null) {
+            mainFrameSaveTimer = new Timer(SAVE_DEBOUNCE_MS, e -> {
+                if (mainFrame != null) {
+                    WindowPreferencesManager.saveMainFrameBounds(mainFrame.getBounds());
+                }
+            });
+            mainFrameSaveTimer.setRepeats(false);
+        }
+        mainFrameSaveTimer.restart();
+    }
+
+    private void scheduleChildSave(Window window) {
+        pendingChildSave = window;
+        if (childSaveTimer == null) {
+            childSaveTimer = new Timer(SAVE_DEBOUNCE_MS, e -> {
+                if (pendingChildSave != null) {
+                    saveChildBounds(pendingChildSave);
+                    pendingChildSave = null;
+                }
+            });
+            childSaveTimer.setRepeats(false);
+        }
+        childSaveTimer.restart();
+    }
+
     private void snapResizedChild(Window window) {
         if (snappingInProgress.contains(window)) {
             return;
@@ -248,20 +388,20 @@ public class WindowLockManager {
         List<Integer> hLines = collectHorizontalSnapLines(window);
 
         if (leftMoved) {
-            int snapped = snapToNearest(curr.x, vLines);
-            if (snapped != curr.x) newX = snapped;
+            int s = snapToNearest(curr.x, vLines);
+            if (s != curr.x) newX = s;
         }
         if (rightMoved) {
-            int snapped = snapToNearest(curr.x + curr.width, vLines);
-            if (snapped != curr.x + curr.width) newRight = snapped;
+            int s = snapToNearest(curr.x + curr.width, vLines);
+            if (s != curr.x + curr.width) newRight = s;
         }
         if (topMoved) {
-            int snapped = snapToNearest(curr.y, hLines);
-            if (snapped != curr.y) newY = snapped;
+            int s = snapToNearest(curr.y, hLines);
+            if (s != curr.y) newY = s;
         }
         if (bottomMoved) {
-            int snapped = snapToNearest(curr.y + curr.height, hLines);
-            if (snapped != curr.y + curr.height) newBottom = snapped;
+            int s = snapToNearest(curr.y + curr.height, hLines);
+            if (s != curr.y + curr.height) newBottom = s;
         }
 
         Rectangle snapped = new Rectangle(newX, newY, newRight - newX, newBottom - newY);
@@ -272,16 +412,18 @@ public class WindowLockManager {
             window.setBounds(snapped);
             snappingInProgress.remove(window);
         }
+
+        scheduleChildSave(window);
     }
 
     private int snapToNearest(int value, List<Integer> lines) {
-        int best = value;
+        int best     = value;
         int bestDist = SNAP_DISTANCE + 1;
         for (int line : lines) {
             int d = Math.abs(value - line);
             if (d < bestDist) {
                 bestDist = d;
-                best = line;
+                best     = line;
             }
         }
         return best;

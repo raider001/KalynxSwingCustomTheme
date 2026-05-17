@@ -77,16 +77,22 @@ public class ThemedList<T> extends JList<T> {
         Theme theme = themeManager.getCurrentTheme();
         Color previousBackground = getBackground();
         Color previousForeground = getForeground();
+        Color previousSelectionBackground = getSelectionBackground();
+        Color previousSelectionForeground = getSelectionForeground();
         Font  previousFont       = getFont();
 
         super.setBackground(theme.getBackgroundColor());
         super.setForeground(theme.getForegroundColor());
+        super.setSelectionBackground(theme.getAccentColor());
+        super.setSelectionForeground(Color.WHITE);
         super.setFont(resolveFont());
 
         super.paint(g);
 
         super.setBackground(previousBackground);
         super.setForeground(previousForeground);
+        super.setSelectionBackground(previousSelectionBackground);
+        super.setSelectionForeground(previousSelectionForeground);
         super.setFont(previousFont);
     }
 

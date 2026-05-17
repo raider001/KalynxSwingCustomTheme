@@ -20,6 +20,7 @@ public class ThemedHtmlLabel extends ThemedLabel {
 
     private final ThemeManager themeManager = ThemeManager.getInstance();
     private String rawHtmlContent = "";
+    private boolean applyingWidth = false;
 
     /**
      * Creates an empty themed HTML label.
@@ -69,14 +70,22 @@ public class ThemedHtmlLabel extends ThemedLabel {
      */
     @Override
     public Dimension getPreferredSize() {
+        if (applyingWidth) {
+            return super.getPreferredSize();
+        }
         Dimension size = super.getPreferredSize();
         Container parent = getParent();
         if (parent != null && parent.getWidth() > 0) {
             int maxWidth = parent.getWidth();
             if (size.width > maxWidth) {
-                setSize(maxWidth, Short.MAX_VALUE);
-                size = super.getPreferredSize();
-                size.width = maxWidth;
+                applyingWidth = true;
+                try {
+                    setSize(maxWidth, Short.MAX_VALUE);
+                    size = super.getPreferredSize();
+                    size.width = maxWidth;
+                } finally {
+                    applyingWidth = false;
+                }
             }
         }
         return size;

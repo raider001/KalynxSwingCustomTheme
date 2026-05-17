@@ -4,7 +4,6 @@ import com.kalynx.swingtheme.theme.Theme;
 import com.kalynx.swingtheme.theme.ThemeManager;
 
 import javax.swing.*;
-import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.Element;
 import java.awt.*;
@@ -179,7 +178,7 @@ public class AnnotatedScrollPane extends ThemedScrollPane {
                         if (r != null) {
                             return Math.max(0.0, Math.min(1.0, r.getY() / paneHeight));
                         }
-                    } catch (BadLocationException ignored) {
+                    } catch (Exception ignored) {
                     }
                 } else if (lineIdx >= root.getElementCount()) {
                     return 1.0;

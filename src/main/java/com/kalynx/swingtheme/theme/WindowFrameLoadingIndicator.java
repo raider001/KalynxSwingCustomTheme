@@ -2,6 +2,8 @@ package com.kalynx.swingtheme.theme;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.awt.geom.Path2D;
 
 /**
@@ -57,6 +59,50 @@ public class WindowFrameLoadingIndicator extends JComponent {
         repaint();
     }
 
+    /**
+     * Installs a {@link WindowFrameLoadingIndicator} onto the glass pane of the supplied
+     * window and wires it to {@link LoadingStateManager} so it automatically animates
+     * while any operation is loading. The listener is removed when the window is closed.
+     *
+     * @param window the window that should display the loading indicator
+     * @return the indicator installed on the window's glass pane
+     */
+    public static WindowFrameLoadingIndicator install(Window window) {
+        if (!(window instanceof RootPaneContainer container)) {
+            throw new IllegalArgumentException("Window must be a RootPaneContainer (JFrame, JDialog, JWindow)");
+        }
+        WindowFrameLoadingIndicator indicator = new WindowFrameLoadingIndicator();
+        Component glass = container.getGlassPane();
+        if (glass instanceof JComponent glassComponent) {
+            glassComponent.setLayout(new BorderLayout());
+            glassComponent.add(indicator, BorderLayout.CENTER);
+            glassComponent.setOpaque(false);
+            glassComponent.setVisible(true);
+        }
+
+        Runnable listener = () -> {
+            if (LoadingStateManager.getInstance().isLoading()) {
+                indicator.startAnimation();
+            } else {
+                indicator.stopAnimation();
+            }
+        };
+        LoadingStateManager.getInstance().addListener(listener);
+
+        window.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosed(WindowEvent e) {
+                LoadingStateManager.getInstance().removeListener(listener);
+                indicator.stopAnimation();
+            }
+        });
+
+        if (LoadingStateManager.getInstance().isLoading()) {
+            indicator.startAnimation();
+        }
+        return indicator;
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -105,24 +151,21 @@ public class WindowFrameLoadingIndicator extends JComponent {
         Path2D path = new Path2D.Float();
         boolean pathStarted = false;
 
-        float topLength = width;
-        float rightLength = topLength + height;
+        float rightLength = (float) width + height;
         float bottomLength = rightLength + width;
         float leftLength = bottomLength + height;
 
-        if (start < topLength && end > 0) {
+        if (start < (float) width && end > 0) {
             float x1 = Math.max(0, start);
-            float x2 = Math.min(topLength, end);
-            if (!pathStarted) {
-                path.moveTo(x1, 0);
-                pathStarted = true;
-            }
+            float x2 = Math.min((float) width, end);
+            path.moveTo(x1, 0);
+            pathStarted = true;
             path.lineTo(x2, 0);
         }
 
-        if (start < rightLength && end > topLength) {
-            float y1 = Math.max(0, start - topLength);
-            float y2 = Math.min(height, end - topLength);
+        if (start < rightLength && end > (float) width) {
+            float y1 = Math.max(0, start - (float) width);
+            float y2 = Math.min(height, end - (float) width);
             if (!pathStarted) {
                 path.moveTo(width, y1);
                 pathStarted = true;
@@ -149,7 +192,6 @@ public class WindowFrameLoadingIndicator extends JComponent {
             float y2 = Math.min(height, end - bottomLength);
             if (!pathStarted) {
                 path.moveTo(0, height - y1);
-                pathStarted = true;
             } else {
                 path.lineTo(0, height - y1);
             }

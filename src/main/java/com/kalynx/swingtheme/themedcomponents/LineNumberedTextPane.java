@@ -2,7 +2,6 @@ package com.kalynx.swingtheme.themedcomponents;
 
 import java.io.Serial;
 
-import com.kalynx.swingtheme.themedcomponents.CommentAnnotation;
 import com.kalynx.swingtheme.theme.Theme;
 import com.kalynx.swingtheme.theme.ThemeManager;
 
@@ -267,8 +266,16 @@ public class LineNumberedTextPane extends ThemedPanel {
             int lineCount = text.isEmpty() ? 1 : text.split("\n", -1).length;
             int maxLineWidth = fm.stringWidth(String.valueOf(lineCount));
             int width = ICON_SPACE + maxLineWidth + RIGHT_MARGIN + 5;
-            int height = textPane.getPreferredSize().height;
+            int height = safeTextPaneHeight(lineCount, fm);
             return new Dimension(width, height);
+        }
+
+        private int safeTextPaneHeight(int lineCount, FontMetrics fm) {
+            try {
+                return textPane.getPreferredSize().height;
+            } catch (Exception ignored) {
+                return lineCount * fm.getHeight();
+            }
         }
 
         @Override

@@ -2,7 +2,6 @@ package com.kalynx.swingtheme.themedcomponents;
 
 import java.io.Serial;
 
-import com.kalynx.swingtheme.theme.LoadingStateManager;
 import com.kalynx.swingtheme.theme.ThemeManager;
 import com.kalynx.swingtheme.theme.WindowFrameLoadingIndicator;
 import com.kalynx.swingtheme.theme.WindowResizeHandler;
@@ -112,20 +111,7 @@ public class ThemedFrame extends JFrame {
     }
 
     private void setupLoadingIndicator() {
-        loadingIndicator = new WindowFrameLoadingIndicator();
-        JPanel glassPane = (JPanel) getGlassPane();
-        glassPane.setLayout(new BorderLayout());
-        glassPane.add(loadingIndicator, BorderLayout.CENTER);
-        glassPane.setOpaque(false);
-        glassPane.setVisible(true);
-
-        LoadingStateManager.getInstance().addListener(() -> {
-            if (LoadingStateManager.getInstance().isLoading()) {
-                loadingIndicator.startAnimation();
-            } else {
-                loadingIndicator.stopAnimation();
-            }
-        });
+        loadingIndicator = WindowFrameLoadingIndicator.install(this);
     }
 
     /**
