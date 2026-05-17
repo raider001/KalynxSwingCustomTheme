@@ -1,6 +1,5 @@
 package com.kalynx.swingtheme.themedcomponents.richtexteditor.demo;
 
-import com.kalynx.swingtheme.theme.ThemeManager;
 import com.kalynx.swingtheme.themedcomponents.*;
 import net.miginfocom.swing.MigLayout;
 
@@ -17,43 +16,33 @@ public class RichTextEditorDemo {
     private static ThemedTextArea htmlOutputArea;
     private static ThemedRichTextEditor editor;
 
-    public static void main(String[] args) {
+    static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            ThemeManager themeManager = ThemeManager.getInstance();
-
             ThemedFrame frame = new ThemedFrame("Rich Text Editor Demo");
             frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
             frame.setSize(1400, 900);
 
             ThemedPanel mainPanel = new ThemedPanel(new BorderLayout());
 
-            ThemedPanel topPanel = new ThemedPanel(new MigLayout("", "[][][][][][]push[]", ""));
+            ThemedPanel topPanel = new ThemedPanel(new MigLayout("", "[][][]push[]", ""));
 
             ThemedLabel titleLabel = new ThemedLabel("Rich Text Editor with List Support & HTML Preview");
             titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 16f));
             topPanel.add(titleLabel, "span, wrap");
 
-            ThemedButton lightThemeButton = new ThemedButton("Light Theme");
-            lightThemeButton.addActionListener(e -> themeManager.setLightTheme());
-            topPanel.add(lightThemeButton, "");
-
-            ThemedButton darkThemeButton = new ThemedButton("Dark Theme");
-            darkThemeButton.addActionListener(e -> themeManager.setDarkTheme());
-            topPanel.add(darkThemeButton, "");
-
             ThemedButton loadSampleButton = new ThemedButton("Load Sample");
-            loadSampleButton.addActionListener(e -> loadSampleContent());
+            loadSampleButton.addActionListener(_ -> loadSampleContent());
             topPanel.add(loadSampleButton, "");
 
             ThemedButton clearButton = new ThemedButton("Clear");
-            clearButton.addActionListener(e -> {
+            clearButton.addActionListener(_ -> {
                 editor.setHtml("");
                 updateHtmlOutput();
             });
             topPanel.add(clearButton, "");
 
             ThemedButton exportUndoButton = new ThemedButton("Export Undo History");
-            exportUndoButton.addActionListener(e -> exportUndoHistory());
+            exportUndoButton.addActionListener(_ -> exportUndoHistory());
             topPanel.add(exportUndoButton, "wrap");
 
             mainPanel.add(topPanel, BorderLayout.NORTH);
@@ -114,7 +103,7 @@ public class RichTextEditorDemo {
             infoPanel.add(infoLabel, "grow");
             mainPanel.add(infoPanel, BorderLayout.SOUTH);
 
-            frame.setContentPane(mainPanel);
+            frame.getContentPanel().add(mainPanel, BorderLayout.CENTER);
             frame.setLocationRelativeTo(null);
             frame.setVisible(true);
 
@@ -124,11 +113,18 @@ public class RichTextEditorDemo {
 
     private static void updateHtmlOutput() {
         if (editor != null && htmlOutputArea != null) {
-            String html = editor.getHtml();
+            String html = stripStyle(editor.getHtml());
             String formattedHtml = formatHtml(html);
             htmlOutputArea.setText(formattedHtml);
             htmlOutputArea.setCaretPosition(0);
         }
+    }
+
+    private static String stripStyle(String html) {
+        if (html == null || html.isEmpty()) {
+            return "";
+        }
+        return html.replaceAll("(?is)<style[^>]*>.*?</style>\\s*", "");
     }
 
     private static String formatHtml(String html) {
@@ -145,7 +141,7 @@ public class RichTextEditorDemo {
             char c = html.charAt(i);
 
             if (c == '<') {
-                if (!inTag && formatted.length() > 0 && formatted.charAt(formatted.length() - 1) != '\n') {
+                if (!inTag && !formatted.isEmpty() && formatted.charAt(formatted.length() - 1) != '\n') {
                     formatted.append('\n');
                     formatted.append("  ".repeat(Math.max(0, indent)));
                 }

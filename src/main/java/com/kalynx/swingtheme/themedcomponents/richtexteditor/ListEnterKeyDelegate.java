@@ -1,9 +1,11 @@
 package com.kalynx.swingtheme.themedcomponents.richtexteditor;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.swing.JEditorPane;
 import javax.swing.SwingUtilities;
 import javax.swing.text.Element;
-import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.html.HTML;
 import javax.swing.text.html.HTMLDocument;
@@ -11,13 +13,16 @@ import javax.swing.text.html.HTMLEditorKit;
 
 /**
  * Handles Enter key behavior when the cursor is within a list.
- *
- * Behavior:
- * - Enter on non-empty list item: Creates a new list item below
- * - Enter on empty list item: Exits the list
- * - Shift+Enter: Handled separately (line break within item)
+ * <p>Behavior:</p>
+ * <ul>
+ *   <li>Enter on non-empty list item: Creates a new list item below</li>
+ *   <li>Enter on empty list item: Exits the list</li>
+ *   <li>Shift+Enter: Handled separately (line break within item)</li>
+ * </ul>
  */
 public class ListEnterKeyDelegate implements EnterKeyDelegate {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ListEnterKeyDelegate.class);
 
     private enum Operation {
         EXIT_LIST,
@@ -49,7 +54,7 @@ public class ListEnterKeyDelegate implements EnterKeyDelegate {
                 depth++;
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            LOGGER.warn("Error checking canHandle", e);
         }
         return false;
     }
@@ -102,7 +107,6 @@ public class ListEnterKeyDelegate implements EnterKeyDelegate {
 
         String fullContent = currentDoc.getText(itemStart, itemEnd - itemStart);
 
-        String beforeCaret = fullContent.substring(0, Math.min(offsetInItem, fullContent.length()));
         String afterCaret = fullContent.substring(Math.min(offsetInItem, fullContent.length()));
 
         if (afterCaret.isEmpty()) {
@@ -127,6 +131,7 @@ public class ListEnterKeyDelegate implements EnterKeyDelegate {
                 try {
                     currentEditor.setCaretPosition(Math.min(newListItemStart, currentDoc.getLength()));
                 } catch (Exception e) {
+                    LOGGER.debug("Could not restore caret after line break", e);
                 }
             });
         }
@@ -141,6 +146,7 @@ public class ListEnterKeyDelegate implements EnterKeyDelegate {
             try {
                 currentEditor.setCaretPosition(Math.min(newListItemStart, currentDoc.getLength()));
             } catch (Exception e) {
+                LOGGER.debug("Could not restore caret after new item", e);
             }
         });
     }
@@ -152,20 +158,20 @@ public class ListEnterKeyDelegate implements EnterKeyDelegate {
         }
 
         int itemStart = currentListItem.getStartOffset();
-        int itemEnd = currentListItem.getEndOffset();
 
         HTMLEditorKit kit = (HTMLEditorKit) currentEditor.getEditorKit();
         
-        try {
-            kit.insertHTML(currentDoc, list.getEndOffset(), "<p> </p>", 1, 0, HTML.Tag.P);
-            Thread.sleep(100);
-        } catch (Exception e) {
             try {
-                currentDoc.insertAfterEnd(list, "<p> </p>");
+                kit.insertHTML(currentDoc, list.getEndOffset(), "<p> </p>", 1, 0, HTML.Tag.P);
                 Thread.sleep(100);
-            } catch (Exception e2) {
+            } catch (Exception e) {
+                try {
+                    currentDoc.insertAfterEnd(list, "<p> </p>");
+                    Thread.sleep(100);
+                } catch (Exception e2) {
+                    LOGGER.debug("Could not insert paragraph after list", e2);
+                }
             }
-        }
 
         Element updatedList = findListElementAt(currentDoc, Math.max(0, itemStart - 1));
         if (updatedList != null && updatedList.getElementCount() > 0) {
@@ -185,7 +191,11 @@ public class ListEnterKeyDelegate implements EnterKeyDelegate {
         SwingUtilities.invokeLater(() -> {
             try {
                 Thread.sleep(50);
-                for (int i = 0; i < currentDoc.getLength(); i++) {
+
+                Element updatedListAgain = findListElementAt(currentDoc, Math.max(0, itemStart - 1));
+                int searchStart = updatedListAgain != null ? updatedListAgain.getEndOffset() : itemStart;
+
+                for (int i = searchStart; i < currentDoc.getLength(); i++) {
                     Element elem = currentDoc.getParagraphElement(i);
                     HTML.Tag tag = (HTML.Tag) elem.getAttributes().getAttribute(StyleConstants.NameAttribute);
                     if (HTML.Tag.P.equals(tag)) {
@@ -195,6 +205,7 @@ public class ListEnterKeyDelegate implements EnterKeyDelegate {
                 }
                 currentEditor.setCaretPosition(Math.min(itemStart, currentDoc.getLength()));
             } catch (Exception e) {
+                LOGGER.debug("Could not restore caret after exit list", e);
             }
         });
     }

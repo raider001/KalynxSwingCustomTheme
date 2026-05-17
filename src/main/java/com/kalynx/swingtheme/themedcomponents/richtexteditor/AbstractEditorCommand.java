@@ -1,15 +1,26 @@
 package com.kalynx.swingtheme.themedcomponents.richtexteditor;
 
+import com.kalynx.swingtheme.themedcomponents.richtexteditor.exclusion.ExclusionRuleSet;
+
 import javax.swing.*;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
+/**
+ * Base class for editor commands. Subclasses may override
+ * {@link #buildExclusionRules()} to declare scenarios in which the command
+ * must not run; the resulting {@link ExclusionRuleSet} is consulted by
+ * {@link #isEnabled(EditorCommandContext)} so every dispatch path
+ * (toolbar buttons, key bindings, {@code EditorCommandManager#executeCommand})
+ * is gated consistently.
+ */
 public abstract class AbstractEditorCommand implements RichTextEditorCommand {
 
     private final String title;
     private final Icon icon;
     private final KeyCombination[] keyCombinations;
     private final CommandCategory category;
+    private volatile ExclusionRuleSet exclusionRules;
 
     public AbstractEditorCommand(String title, Icon icon, CommandCategory category, KeyCombination... keyCombinations) {
         this.title = title;
@@ -53,7 +64,31 @@ public abstract class AbstractEditorCommand implements RichTextEditorCommand {
 
     @Override
     public boolean isEnabled(EditorCommandContext context) {
-        return context.isEditable();
+        return context.isEditable() && getExclusionRules().isAllowed(context);
+    }
+
+    /**
+     * @return the resolved exclusion rule set for this command (lazy, cached)
+     */
+    public final ExclusionRuleSet getExclusionRules() {
+        ExclusionRuleSet cached = exclusionRules;
+        if (cached == null) {
+            cached = buildExclusionRules();
+            if (cached == null) {
+                cached = ExclusionRuleSet.empty();
+            }
+            exclusionRules = cached;
+        }
+        return cached;
+    }
+
+    /**
+     * Subclasses override to declare contexts in which this command must not
+     * run. Default implementation returns {@link ExclusionRuleSet#empty()}.
+     *
+     * @return an {@link ExclusionRuleSet} describing forbidden contexts
+     */
+    protected ExclusionRuleSet buildExclusionRules() {
+        return ExclusionRuleSet.empty();
     }
 }
-

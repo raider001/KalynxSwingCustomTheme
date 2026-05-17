@@ -13,7 +13,6 @@
 
     <groupId>com.kalynx</groupId>
     <artifactId>kalynx-swing-custom-theme</artifactId>
-    <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <name>Kalynx Swing Custom Theme</name>
@@ -29,6 +28,12 @@
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

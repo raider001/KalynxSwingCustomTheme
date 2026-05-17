@@ -9,9 +9,28 @@ public class EditorCommandManager {
     private final Map<String, RichTextEditorCommand> commands = new ConcurrentHashMap<>();
     private final Map<KeyCombination, RichTextEditorCommand> keyBindings = new ConcurrentHashMap<>();
     private final EditorCommandContext context;
+    private Runnable postExecuteHook;
 
     public EditorCommandManager(EditorCommandContext context) {
         this.context = context;
+    }
+
+    /**
+     * Sets a callback invoked after every successful command execution (both
+     * programmatic and keyboard-triggered). Use this to refresh UI state such
+     * as button active states.
+     *
+     * @param hook runnable to call post-execution, or {@code null} to clear
+     */
+    public void setPostExecuteHook(Runnable hook) {
+        this.postExecuteHook = hook;
+    }
+
+    /**
+     * @return the {@link EditorCommandContext} this manager dispatches against
+     */
+    public EditorCommandContext getContext() {
+        return context;
     }
 
     public void registerCommand(String id, RichTextEditorCommand command) {
@@ -28,6 +47,7 @@ public class EditorCommandManager {
         }
     }
 
+    @SuppressWarnings("unused")
     public void unregisterCommand(String id) {
         RichTextEditorCommand command = commands.remove(id);
         if (command != null) {
@@ -42,10 +62,12 @@ public class EditorCommandManager {
         return commands.get(id);
     }
 
+    @SuppressWarnings("unused")
     public RichTextEditorCommand getCommandForKey(KeyCombination keyCombination) {
         return keyBindings.get(keyCombination);
     }
 
+    @SuppressWarnings("unused")
     public Collection<RichTextEditorCommand> getAllCommands() {
         return Collections.unmodifiableCollection(commands.values());
     }
@@ -54,7 +76,7 @@ public class EditorCommandManager {
         Map<RichTextEditorCommand.CommandCategory, List<RichTextEditorCommand>> result = new HashMap<>();
 
         for (RichTextEditorCommand command : commands.values()) {
-            result.computeIfAbsent(command.getCategory(), k -> new ArrayList<>()).add(command);
+            result.computeIfAbsent(command.getCategory(), _ -> new ArrayList<>()).add(command);
         }
 
         return result;
@@ -64,6 +86,13 @@ public class EditorCommandManager {
         RichTextEditorCommand command = commands.get(id);
         if (command != null && command.isEnabled(context)) {
             command.execute(context);
+            runPostExecuteHook();
+        }
+    }
+
+    private void runPostExecuteHook() {
+        if (postExecuteHook != null) {
+            SwingUtilities.invokeLater(postExecuteHook);
         }
     }
 
@@ -78,6 +107,7 @@ public class EditorCommandManager {
             public void actionPerformed(java.awt.event.ActionEvent e) {
                 if (command.isEnabled(context)) {
                     command.execute(context);
+                    runPostExecuteHook();
                 }
             }
         });

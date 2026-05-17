@@ -40,6 +40,7 @@ public class ThemeManager {
      *
      * @param listener the listener to remove
      */
+    @SuppressWarnings("unused")
     public void removeThemeChangeListener(Runnable listener) {
         themeChangeListeners.remove(listener);
     }
@@ -236,6 +237,27 @@ public class ThemeManager {
      */
     public Theme getCurrentTheme() {
         return currentTheme;
+    }
+
+    /**
+     * Get the base font size (with DPI scaling applied)
+     */
+    public int getBaseFontSize() {
+        return scale(12);
+    }
+
+    /**
+     * Get the base font used by the theme
+     */
+    public Font getBaseFont() {
+        return new Font("Segoe UI", Font.PLAIN, getBaseFontSize());
+    }
+
+    /**
+     * Get the base font family name used by the theme
+     */
+    public String getBaseFontFamily() {
+        return "Segoe UI";
     }
 
 }

@@ -3,6 +3,10 @@ package com.kalynx.swingtheme.themedcomponents.richtexteditor.commands;
 import com.kalynx.swingtheme.themedcomponents.richtexteditor.AbstractEditorCommand;
 import com.kalynx.swingtheme.themedcomponents.richtexteditor.EditorCommandContext;
 import com.kalynx.swingtheme.themedcomponents.richtexteditor.KeyCombination;
+import com.kalynx.swingtheme.themedcomponents.richtexteditor.exclusion.ExclusionRuleSet;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.swing.text.*;
 import javax.swing.text.html.HTML;
@@ -11,6 +15,7 @@ import java.awt.event.KeyEvent;
 
 public class IndentCommand extends AbstractEditorCommand {
     
+    private static final Logger LOGGER = LoggerFactory.getLogger(IndentCommand.class);
     private static final int INDENT_PIXELS = 40;
     
     public IndentCommand() {
@@ -19,14 +24,20 @@ public class IndentCommand extends AbstractEditorCommand {
     }
     
     @Override
+    protected ExclusionRuleSet buildExclusionRules() {
+        return ExclusionRuleSet.builder()
+            .notInsideAnyOf(HTML.Tag.PRE, HTML.Tag.CODE)
+            .build();
+    }
+
+    @Override
     public void execute(EditorCommandContext context) {
         Document doc = context.getDocument();
         int start = context.getCaretPosition();
         
-        if (doc instanceof HTMLDocument) {
-            HTMLDocument htmlDoc = (HTMLDocument) doc;
+        if (doc instanceof HTMLDocument htmlDoc) {
             Element paragraph = htmlDoc.getParagraphElement(start);
-            
+
             if (isInListItem(paragraph)) {
                 indentListItem(htmlDoc, paragraph);
             } else {
@@ -66,7 +77,7 @@ public class IndentCommand extends AbstractEditorCommand {
             int length = listItem.getEndOffset() - start;
             doc.setParagraphAttributes(start, length, attrs, false);
         } catch (Exception e) {
-            e.printStackTrace();
+            LOGGER.warn("Failed to indent list item", e);
         }
     }
     
@@ -91,4 +102,3 @@ public class IndentCommand extends AbstractEditorCommand {
         return null;
     }
 }
-

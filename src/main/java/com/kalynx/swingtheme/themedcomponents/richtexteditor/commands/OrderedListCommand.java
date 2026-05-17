@@ -5,6 +5,10 @@ import com.kalynx.swingtheme.themedcomponents.richtexteditor.EditorCommandContex
 import com.kalynx.swingtheme.themedcomponents.richtexteditor.EnterKeyDelegate;
 import com.kalynx.swingtheme.themedcomponents.richtexteditor.KeyCombination;
 import com.kalynx.swingtheme.themedcomponents.richtexteditor.ListEnterKeyDelegate;
+import com.kalynx.swingtheme.themedcomponents.richtexteditor.exclusion.ExclusionRuleSet;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.swing.text.*;
 import javax.swing.text.html.HTML;
@@ -14,18 +18,25 @@ import java.awt.event.KeyEvent;
 
 /**
  * Creates or removes ordered (numbered) lists.
- *
- * HTML Structure Rule: Lists are always inserted at the root level of the document
+ * <p>HTML Structure Rule: Lists are always inserted at the root level of the document
  * (popDepth=1), never nested within paragraphs or headings. This ensures predictable
- * behavior with Java's HTMLEditorKit.
+ * behavior with Java's HTMLEditorKit.</p>
  */
 public class OrderedListCommand extends AbstractEditorCommand {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(OrderedListCommand.class);
     private static final EnterKeyDelegate enterKeyDelegate = new ListEnterKeyDelegate();
 
     public OrderedListCommand() {
         super("Ordered List", null, CommandCategory.FORMATTING,
                 new KeyCombination(KeyEvent.VK_O, KeyEvent.CTRL_DOWN_MASK | KeyEvent.SHIFT_DOWN_MASK));
+    }
+
+    @Override
+    protected ExclusionRuleSet buildExclusionRules() {
+        return ExclusionRuleSet.builder()
+            .notInsideAnyOf(HTML.Tag.PRE, HTML.Tag.CODE)
+            .build();
     }
 
     @Override
@@ -36,11 +47,10 @@ public class OrderedListCommand extends AbstractEditorCommand {
     @Override
     public void execute(EditorCommandContext context) {
         Document doc = context.getDocument();
-        if (!(doc instanceof HTMLDocument)) {
+        if (!(doc instanceof HTMLDocument htmlDoc)) {
             return;
         }
 
-        HTMLDocument htmlDoc = (HTMLDocument) doc;
         int start = context.getSelectionStart();
         int end = context.getSelectionEnd();
 
@@ -54,7 +64,7 @@ public class OrderedListCommand extends AbstractEditorCommand {
                 insertOrderedList(htmlDoc, start, end);
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            LOGGER.warn("Failed to execute ordered list command", e);
         }
     }
 
@@ -141,10 +151,3 @@ public class OrderedListCommand extends AbstractEditorCommand {
                    .replace("'", "&#39;");
     }
 }
-
-
-
-
-
-
-

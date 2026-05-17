@@ -1,28 +1,27 @@
 package com.kalynx.swingtheme.themedcomponents;
 
 import com.kalynx.swingtheme.theme.Theme;
-import com.kalynx.swingtheme.theme.ThemeManager;
 import com.kalynx.swingtheme.themedcomponents.richtexteditor.CompactHTMLWriter;
 import com.kalynx.swingtheme.themedcomponents.richtexteditor.CustomHTMLEditorKit;
 import com.kalynx.swingtheme.themedcomponents.richtexteditor.EditorCommandContext;
 import com.kalynx.swingtheme.themedcomponents.richtexteditor.EditorCommandManager;
 import com.kalynx.swingtheme.themedcomponents.richtexteditor.FormatOption;
 import com.kalynx.swingtheme.themedcomponents.richtexteditor.RichTextEditorButton;
+import com.kalynx.swingtheme.themedcomponents.richtexteditor.BlockedFlashLayerUI;
 import com.kalynx.swingtheme.themedcomponents.richtexteditor.RichTextEditorCommand;
 import com.kalynx.swingtheme.themedcomponents.richtexteditor.commands.*;
 import com.kalynx.swingtheme.themedcomponents.richtexteditor.icons.*;
+import com.kalynx.swingtheme.utils.HtmlThemeHelper;
 
 import javax.swing.*;
-import javax.swing.event.CaretEvent;
-import javax.swing.event.CaretListener;
 import javax.swing.text.*;
 import javax.swing.text.html.HTML;
 import javax.swing.text.html.HTMLDocument;
-import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.StyleSheet;
+import javax.swing.text.StyledEditorKit;
 import javax.swing.undo.UndoManager;
 import java.awt.*;
-import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.io.Serial;
 import java.io.StringWriter;
 import java.util.HashMap;
@@ -35,11 +34,10 @@ public class ThemedRichTextEditor extends ThemedPanel {
     private final JEditorPane editorPane;
     private final EditorCommandManager commandManager;
     private final ThemedPanel toolbarPanel;
-    private final ThemedScrollPane scrollPane;
     private final UndoManager undoManager;
     private final Map<String, RichTextEditorButton> buttonMap = new HashMap<>();
     private JComboBox<FormatOption> formatComboBox;
-    private boolean updatingFormat = false;
+    private ActionListener formatComboListener;
 
     public ThemedRichTextEditor() {
         this(true);
@@ -55,6 +53,7 @@ public class ThemedRichTextEditor extends ThemedPanel {
         editorPane.setEditorKit(kit);
 
         HTMLDocument doc = (HTMLDocument) editorPane.getDocument();
+        updateEditorColors();
         updateStyleSheet(doc);
 
         installKeyBindings(editorPane, kit);
@@ -64,17 +63,18 @@ public class ThemedRichTextEditor extends ThemedPanel {
 
         EditorCommandContext context = new EditorCommandContext(editorPane, this);
         commandManager = new EditorCommandManager(context);
+        commandManager.setPostExecuteHook(this::updateButtonStates);
 
         registerDefaultCommands();
 
-        scrollPane = new ThemedScrollPane(editorPane);
+        ThemedScrollPane scrollPane = new ThemedScrollPane(editorPane);
         add(scrollPane, BorderLayout.CENTER);
 
         if (showToolbar) {
             toolbarPanel = createToolbar();
             add(toolbarPanel, BorderLayout.NORTH);
 
-            editorPane.addCaretListener(e -> updateButtonStates());
+            editorPane.addCaretListener(_ -> onCaretChanged());
         } else {
             toolbarPanel = null;
         }
@@ -128,8 +128,8 @@ public class ThemedRichTextEditor extends ThemedPanel {
         commandManager.registerCommand("paste", new PasteCommand());
         commandManager.registerCommand("selectAll", new SelectAllCommand());
         commandManager.registerCommand("clearFormatting", new ClearFormattingCommand());
+        commandManager.registerCommand("codeBlock", new CodeBlockCommand());
 
-        commandManager.registerCommand("formatNormal", new FormatCommand("Normal"));
         commandManager.registerCommand("formatParagraph", new FormatCommand("Paragraph"));
         commandManager.registerCommand("formatH1", new FormatCommand("H1"));
         commandManager.registerCommand("formatH2", new FormatCommand("H2"));
@@ -159,7 +159,7 @@ public class ThemedRichTextEditor extends ThemedPanel {
         formatComboBox.setSelectedIndex(0);
         formatComboBox.setMaximumRowCount(6);
         formatComboBox.setRenderer(new FormatComboBoxRenderer());
-        formatComboBox.setFont(new Font("Segoe UI", Font.PLAIN, themeManager.scale(12)));
+        formatComboBox.setFont(new Font(themeManager.getBaseFontFamily(), Font.PLAIN, themeManager.scale(12)));
         formatComboBox.setPreferredSize(new Dimension(themeManager.scale(50), themeManager.scale(28)));
 
         Theme theme = themeManager.getCurrentTheme();
@@ -170,20 +170,29 @@ public class ThemedRichTextEditor extends ThemedPanel {
         formatComboBox.setBorder(BorderFactory.createLineBorder(theme.getBorderColor(), 1));
         formatComboBox.setUI(new FormatComboBoxUI());
 
-        formatComboBox.addActionListener(e -> {
-            if (updatingFormat) {
+        BlockedFlashLayerUI formatComboFlashUI = new BlockedFlashLayerUI();
+        formatComboListener = _ -> {
+            FormatOption selected = (FormatOption) formatComboBox.getSelectedItem();
+            if (selected == null) {
+                return;
+            }
+            RichTextEditorCommand command = commandManager.getCommand(selected.getCommandId());
+            EditorCommandContext context = commandManager.getContext();
+            if (command != null && !command.isEnabled(context)) {
+                formatComboFlashUI.flash();
+                SwingUtilities.invokeLater(this::updateButtonStates);
                 return;
             }
 
-            FormatOption selected = (FormatOption) formatComboBox.getSelectedItem();
-            if (selected != null) {
-                commandManager.executeCommand(selected.getCommandId());
-                editorPane.requestFocusInWindow();
+            commandManager.executeCommand(selected.getCommandId());
+            editorPane.requestFocusInWindow();
 
-                SwingUtilities.invokeLater(() -> updateButtonStates());
-            }
-        });
-        toolbar.add(formatComboBox);
+            SwingUtilities.invokeLater(this::updateButtonStates);
+        };
+        formatComboBox.addActionListener(formatComboListener);
+
+        JLayer<JComponent> wrappedCombo = new JLayer<>(formatComboBox, formatComboFlashUI);
+        toolbar.add(wrappedCombo);
         toolbar.add(createSeparator());
 
         addToolbarButton(toolbar, new BoldIcon(iconSize), "bold", "Bold");
@@ -198,6 +207,7 @@ public class ThemedRichTextEditor extends ThemedPanel {
         toolbar.add(createSeparator());
 
         addToolbarButton(toolbar, new ClearFormattingIcon(iconSize), "clearFormatting", "Clear Formatting");
+        addToolbarButton(toolbar, new CodeBlockIcon(iconSize), "codeBlock", "Code Block");
         toolbar.add(createSeparator());
 
         addToolbarButton(toolbar, new UndoIcon(iconSize), "undo", "Undo");
@@ -219,20 +229,14 @@ public class ThemedRichTextEditor extends ThemedPanel {
         if (command != null) {
             String fullTooltip = command.getTooltip();
             button.setToolTipText(fullTooltip);
-            button.addActionListener(e -> {
-                int caretPos = editorPane.getCaretPosition();
+            button.addActionListener(_ -> {
+                EditorCommandContext context = commandManager.getContext();
+                if (!command.isEnabled(context)) {
+                    button.flashBlocked();
+                    return;
+                }
                 commandManager.executeCommand(commandId);
-
-                SwingUtilities.invokeLater(() -> {
-                    editorPane.requestFocusInWindow();
-                    try {
-                        if (caretPos <= editorPane.getDocument().getLength()) {
-                            editorPane.setCaretPosition(caretPos);
-                        }
-                    } catch (Exception ex) {
-                    }
-                    updateButtonStates();
-                });
+                editorPane.requestFocusInWindow();
             });
         } else {
             button.setToolTipText(tooltip);
@@ -241,60 +245,98 @@ public class ThemedRichTextEditor extends ThemedPanel {
         return button;
     }
 
+    private void onCaretChanged() {
+        syncInputAttributesFromDocument();
+        updateButtonStates();
+    }
+
     private void updateButtonStates() {
         int pos = editorPane.getCaretPosition();
         Document doc = editorPane.getDocument();
 
-        if (doc instanceof HTMLDocument) {
-            HTMLDocument htmlDoc = (HTMLDocument) doc;
+        if (!(doc instanceof HTMLDocument htmlDoc)) {
+            return;
+        }
 
-            if (pos > 0 && pos <= doc.getLength()) {
-                Element element = htmlDoc.getCharacterElement(pos);
-                AttributeSet attrs = element.getAttributes();
+        if (pos < 0 || pos > doc.getLength()) {
+            updateButtonState("bold", false);
+            updateButtonState("italic", false);
+            updateButtonState("underline", false);
+            if (formatComboBox != null) {
+                formatComboBox.setSelectedItem("Normal");
+            }
+            return;
+        }
 
-                boolean bold = false;
-                boolean italic = false;
-                boolean underline = false;
+        boolean bold;
+        boolean italic;
+        boolean underline;
 
-                Object tag = attrs.getAttribute(StyleConstants.NameAttribute);
-                if (tag != null) {
-                    String tagName = tag.toString().toLowerCase();
-                    bold = tagName.equals("b") || tagName.equals("strong");
-                    italic = tagName.equals("i") || tagName.equals("em");
-                    underline = tagName.equals("u");
-                }
-
-                if (!bold) bold = StyleConstants.isBold(attrs);
-                if (!italic) italic = StyleConstants.isItalic(attrs);
-                if (!underline) underline = StyleConstants.isUnderline(attrs);
-
-                Element parent = element.getParentElement();
-                while (parent != null && (!bold || !italic || !underline)) {
-                    Object parentTag = parent.getAttributes().getAttribute(StyleConstants.NameAttribute);
-                    if (parentTag != null) {
-                        String parentTagName = parentTag.toString().toLowerCase();
-                        if (!bold && (parentTagName.equals("b") || parentTagName.equals("strong"))) bold = true;
-                        if (!italic && (parentTagName.equals("i")  || parentTagName.equals("em"))) italic = true;
-                        if (!underline && parentTagName.equals("u")) underline = true;
-                    }
-                    parent = parent.getParentElement();
-                }
-
-                updateButtonState("bold", bold);
-                updateButtonState("italic", italic);
-                updateButtonState("underline", underline);
-
-                updateFormatComboBox(htmlDoc, pos);
+        if (editorPane.getSelectionStart() != editorPane.getSelectionEnd()) {
+            int selStart = editorPane.getSelectionStart();
+            bold = isFormattingActive(htmlDoc, selStart, StyleConstants.Bold);
+            italic = isFormattingActive(htmlDoc, selStart, StyleConstants.Italic);
+            underline = isFormattingActive(htmlDoc, selStart, StyleConstants.Underline);
+        } else {
+            MutableAttributeSet inputAttrs = resolveInputAttributes();
+            if (inputAttrs != null) {
+                bold = StyleConstants.isBold(inputAttrs);
+                italic = StyleConstants.isItalic(inputAttrs);
+                underline = StyleConstants.isUnderline(inputAttrs);
             } else {
-                updateButtonState("bold", false);
-                updateButtonState("italic", false);
-                updateButtonState("underline", false);
-
-                if (formatComboBox != null) {
-                    formatComboBox.setSelectedItem("Normal");
-                }
+                bold = isFormattingActive(htmlDoc, pos, StyleConstants.Bold);
+                italic = isFormattingActive(htmlDoc, pos, StyleConstants.Italic);
+                underline = isFormattingActive(htmlDoc, pos, StyleConstants.Underline);
             }
         }
+
+        updateButtonState("bold", bold);
+        updateButtonState("italic", italic);
+        updateButtonState("underline", underline);
+
+        updateFormatComboBox(htmlDoc, pos);
+    }
+
+    private void syncInputAttributesFromDocument() {
+        int pos = editorPane.getCaretPosition();
+        Document doc = editorPane.getDocument();
+        if (!(doc instanceof HTMLDocument htmlDoc)) {
+            return;
+        }
+        MutableAttributeSet inputAttrs = resolveInputAttributes();
+        if (inputAttrs == null) {
+            return;
+        }
+        StyleConstants.setBold(inputAttrs, isFormattingActive(htmlDoc, pos, StyleConstants.Bold));
+        StyleConstants.setItalic(inputAttrs, isFormattingActive(htmlDoc, pos, StyleConstants.Italic));
+        StyleConstants.setUnderline(inputAttrs, isFormattingActive(htmlDoc, pos, StyleConstants.Underline));
+    }
+
+    private boolean isFormattingActive(HTMLDocument doc, int pos, Object styleKey) {
+        int lookupPos = pos > 0 ? pos - 1 : 0;
+        Element element = doc.getCharacterElement(lookupPos);
+        while (element != null) {
+            AttributeSet attrs = element.getAttributes();
+            Object tag = attrs.getAttribute(StyleConstants.NameAttribute);
+            if (tag != null) {
+                String tagName = tag.toString().toLowerCase();
+                if (styleKey == StyleConstants.Bold && (tagName.equals("b") || tagName.equals("strong"))) return true;
+                if (styleKey == StyleConstants.Italic && (tagName.equals("i") || tagName.equals("em"))) return true;
+                if (styleKey == StyleConstants.Underline && tagName.equals("u")) return true;
+            }
+            if (styleKey == StyleConstants.Bold && StyleConstants.isBold(attrs)) return true;
+            if (styleKey == StyleConstants.Italic && StyleConstants.isItalic(attrs)) return true;
+            if (styleKey == StyleConstants.Underline && StyleConstants.isUnderline(attrs)) return true;
+            element = element.getParentElement();
+        }
+        return false;
+    }
+
+    private MutableAttributeSet resolveInputAttributes() {
+        if (editorPane.getEditorKit() instanceof StyledEditorKit styledKit) {
+            return styledKit.getInputAttributes();
+        }
+        return null;
     }
 
     private void updateFormatComboBox(HTMLDocument htmlDoc, int pos) {
@@ -326,16 +368,19 @@ public class ThemedRichTextEditor extends ThemedPanel {
 
         FormatOption currentSelection = (FormatOption) formatComboBox.getSelectedItem();
         if (currentSelection == null || !currentSelection.getCommandId().equals(commandId)) {
-            updatingFormat = true;
-            ComboBoxModel<FormatOption> model = formatComboBox.getModel();
-            for (int i = 0; i < model.getSize(); i++) {
-                FormatOption option = model.getElementAt(i);
-                if (option != null && option.getCommandId().equals(commandId)) {
-                    formatComboBox.setSelectedItem(option);
-                    break;
+            formatComboBox.removeActionListener(formatComboListener);
+            try {
+                ComboBoxModel<FormatOption> model = formatComboBox.getModel();
+                for (int i = 0; i < model.getSize(); i++) {
+                    FormatOption option = model.getElementAt(i);
+                    if (option != null && option.getCommandId().equals(commandId)) {
+                        formatComboBox.setSelectedItem(option);
+                        break;
+                    }
                 }
+            } finally {
+                formatComboBox.addActionListener(formatComboListener);
             }
-            updatingFormat = false;
         }
     }
 
@@ -387,85 +432,11 @@ public class ThemedRichTextEditor extends ThemedPanel {
 
     private void updateStyleSheet(HTMLDocument doc) {
         Theme theme = themeManager.getCurrentTheme();
-        StyleSheet styleSheet = doc.getStyleSheet();
+        StyleSheet documentStyleSheet = doc.getStyleSheet();
 
-        styleSheet.addRule("body { " +
-            "color: " + toHex(theme.getForegroundColor()) + "; " +
-            "background-color: " + toHex(theme.getInputBackground()) + "; " +
-            "font-family: 'Segoe UI', Arial, sans-serif; " +
-            "font-size: 14px; " +
-            "margin: 10px; " +
-            "}");
-
-        styleSheet.addRule("p { " +
-            "margin: 8px 0; " +
-            "font-size: 14px; " +
-            "}");
-
-        styleSheet.addRule("h1 { " +
-            "font-size: 32px; " +
-            "font-weight: bold; " +
-            "margin: 16px 0; " +
-            "}");
-
-        styleSheet.addRule("h2 { " +
-            "font-size: 24px; " +
-            "font-weight: bold; " +
-            "margin: 14px 0; " +
-            "}");
-
-        styleSheet.addRule("h3 { " +
-            "font-size: 19px; " +
-            "font-weight: bold; " +
-            "margin: 12px 0; " +
-            "}");
-
-        styleSheet.addRule("h4 { " +
-            "font-size: 16px; " +
-            "font-weight: bold; " +
-            "margin: 10px 0; " +
-            "}");
-
-        styleSheet.addRule("h5 { " +
-            "font-size: 13px; " +
-            "font-weight: bold; " +
-            "margin: 8px 0; " +
-            "}");
-
-        styleSheet.addRule("ul, ol { " +
-            "margin: 10px 0; " +
-            "padding-left: 30px; " +
-            "}");
-
-        styleSheet.addRule("li { " +
-            "margin: 3px 0; " +
-            "padding: 2px; " +
-            "}");
-
-        styleSheet.addRule("a { " +
-            "color: " + toHex(theme.getAccentColor()) + "; " +
-            "text-decoration: underline; " +
-            "}");
-
-        styleSheet.addRule("strong, b { font-weight: bold; }");
-        styleSheet.addRule("em, i { font-style: italic; }");
-        styleSheet.addRule("u { text-decoration: underline; }");
-
-        styleSheet.addRule("code { " +
-            "background-color: " + toHex(theme.getButtonBackground()) + "; " +
-            "border: 1px solid " + toHex(theme.getBorderColor()) + "; " +
-            "padding: 2px 4px; " +
-            "font-family: 'Consolas', monospace; " +
-            "font-size: 13px; " +
-            "}");
-
-        styleSheet.addRule("pre { " +
-            "background-color: " + toHex(theme.getButtonBackground()) + "; " +
-            "border: 1px solid " + toHex(theme.getBorderColor()) + "; " +
-            "padding: 10px; " +
-            "font-family: 'Consolas', monospace; " +
-            "overflow-x: auto; " +
-            "}");
+        int baseFontSize = themeManager.getBaseFontSize();
+        String fontFamily = themeManager.getBaseFontFamily();
+        HtmlThemeHelper.applyEditorStyleRules(documentStyleSheet, theme, baseFontSize, fontFamily);
     }
 
     private void updateEditorColors() {
@@ -476,9 +447,6 @@ public class ThemedRichTextEditor extends ThemedPanel {
         editorPane.setSelectionColor(theme.getAccentColor());
     }
 
-    private String toHex(Color color) {
-        return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
-    }
 
     public JEditorPane getEditorPane() {
         return editorPane;
@@ -501,7 +469,17 @@ public class ThemedRichTextEditor extends ThemedPanel {
     }
 
     public void setHtml(String html) {
-        editorPane.setText(html);
+        String incoming = html != null ? html : "";
+        if (incoming.equals(getHtml())) {
+            return;
+        }
+        int caretPos = editorPane.getCaretPosition();
+        editorPane.setText(incoming);
+        int length = editorPane.getDocument().getLength();
+        try {
+            editorPane.setCaretPosition(Math.min(caretPos, length));
+        } catch (IllegalArgumentException ignored) {
+        }
     }
 
     public String getPlainText() {
@@ -516,11 +494,6 @@ public class ThemedRichTextEditor extends ThemedPanel {
         return undoManager;
     }
 
-    @Override
-    protected void paintComponent(Graphics g) {
-        super.paintComponent(g);
-        updateEditorColors();
-    }
 
     private class FormatComboBoxUI extends javax.swing.plaf.basic.BasicComboBoxUI {
         @Override
@@ -570,8 +543,7 @@ public class ThemedRichTextEditor extends ThemedPanel {
         public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
             super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
 
-            if (value instanceof FormatOption) {
-                FormatOption option = (FormatOption) value;
+            if (value instanceof FormatOption option) {
                 setText("");
                 setIcon(option.getIcon());
                 setHorizontalAlignment(CENTER);

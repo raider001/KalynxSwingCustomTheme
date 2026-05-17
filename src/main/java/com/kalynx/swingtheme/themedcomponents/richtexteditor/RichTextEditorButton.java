@@ -12,24 +12,30 @@ public class RichTextEditorButton extends JButton {
     private static final long serialVersionUID = 1L;
 
     private final transient ThemeManager themeManager;
+    private final transient BlockedFlashAnimator blockedFlashAnimator;
     private boolean isPressed = false;
     private boolean isActive = false;
 
     public RichTextEditorButton(Icon icon) {
         super(icon);
         this.themeManager = ThemeManager.getInstance();
+        this.blockedFlashAnimator = new BlockedFlashAnimator(this::repaint);
         configureButton();
     }
 
+    @SuppressWarnings("unused")
     public RichTextEditorButton(String text) {
         super(text);
         this.themeManager = ThemeManager.getInstance();
+        this.blockedFlashAnimator = new BlockedFlashAnimator(this::repaint);
         configureButton();
     }
 
+    @SuppressWarnings("unused")
     public RichTextEditorButton(String text, Icon icon) {
         super(text, icon);
         this.themeManager = ThemeManager.getInstance();
+        this.blockedFlashAnimator = new BlockedFlashAnimator(this::repaint);
         configureButton();
     }
 
@@ -75,7 +81,7 @@ public class RichTextEditorButton extends JButton {
             }
         });
 
-        themeManager.addThemeChangeListener(() -> repaint());
+        themeManager.addThemeChangeListener(this::repaint);
     }
 
     @Override
@@ -119,6 +125,31 @@ public class RichTextEditorButton extends JButton {
 
         g2.dispose();
         super.paintComponent(g);
+
+        if (blockedFlashAnimator.getAlpha() > 0f) {
+            paintBlockedFlash(g);
+        }
+    }
+
+    private void paintBlockedFlash(Graphics g) {
+        Graphics2D g3 = (Graphics2D) g.create();
+        g3.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        Color base = themeManager.getCurrentTheme().getErrorColor();
+        int alpha = Math.max(0, Math.min(255, Math.round(blockedFlashAnimator.getAlpha() * 255f)));
+        g3.setColor(new Color(base.getRed(), base.getGreen(), base.getBlue(), alpha));
+        g3.fillRoundRect(0, 0, getWidth(), getHeight(),
+            themeManager.scale(6), themeManager.scale(6));
+        g3.dispose();
+    }
+
+    /**
+     * Plays a brief red fade-in / fade-out flash over the button to signal that
+     * the requested command was blocked (e.g. by an exclusion rule). The flash
+     * colour is sourced from the active theme's error colour so it stays
+     * theme-consistent.
+     */
+    public void flashBlocked() {
+        blockedFlashAnimator.flash();
     }
 
     public void setActive(boolean active) {

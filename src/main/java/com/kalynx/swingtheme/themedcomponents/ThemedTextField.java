@@ -37,16 +37,26 @@ public class ThemedTextField extends JTextField {
     public ThemedTextField(int columns) {
         super(columns);
         this.themeManager = ThemeManager.getInstance();
+        setFont(themeManager.getBaseFont());
+        themeManager.addThemeChangeListener(this::updateFont);
     }
     
     public ThemedTextField(String text) {
         super(text);
         this.themeManager = ThemeManager.getInstance();
+        setFont(themeManager.getBaseFont());
+        themeManager.addThemeChangeListener(this::updateFont);
     }
     
     public ThemedTextField(String text, int columns) {
         super(text, columns);
         this.themeManager = ThemeManager.getInstance();
+        setFont(themeManager.getBaseFont());
+        themeManager.addThemeChangeListener(this::updateFont);
+    }
+
+    private void updateFont() {
+        setFont(themeManager.getBaseFont());
     }
     
     @Override
@@ -86,9 +96,8 @@ public class ThemedTextField extends JTextField {
      *
      * @param validator The validator to use for validation
      * @param onValidValueSaved Callback when a valid value is saved (focus lost)
-     * @return this TextField for method chaining
      */
-    public ThemedTextField setupValidation(Validator validator, Consumer<String> onValidValueSaved) {
+    public void setupValidation(Validator validator, Consumer<String> onValidValueSaved) {
         this.validator = validator;
         this.onValidValueSaved = onValidValueSaved;
         this.validationOverlay = new ThemedValidationOverlay(this);
@@ -125,8 +134,6 @@ public class ThemedTextField extends JTextField {
                 }
             }
         });
-
-        return this;
     }
 
 
@@ -176,11 +183,9 @@ public class ThemedTextField extends JTextField {
 
     /**
      * Clears any validation error state
-     *
-     * @return this TextField for method chaining
      */
-    public ThemedTextField clearValidationState() {
-        return setValidationState(true, null);
+    public void clearValidationState() {
+        setValidationState(true, null);
     }
 
     /**
@@ -192,6 +197,7 @@ public class ThemedTextField extends JTextField {
         return isValid;
     }
 
+    @SuppressWarnings("unused")
     public void bindTo(ComponentModel<String> model) {
         unbind();
         this.model = model;
