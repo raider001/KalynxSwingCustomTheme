@@ -462,14 +462,14 @@ public class ThemedRichTextEditor extends ThemedPanel {
             StringWriter writer = new StringWriter();
             CompactHTMLWriter htmlWriter = new CompactHTMLWriter(writer, doc);
             htmlWriter.write();
-            return writer.toString();
+            return HtmlThemeHelper.stripStyles(writer.toString());
         } catch (Exception e) {
             return editorPane.getText();
         }
     }
 
     public void setHtml(String html) {
-        String incoming = html != null ? html : "";
+        String incoming = HtmlThemeHelper.stripStyles(html != null ? html : "");
         if (incoming.equals(getHtml())) {
             return;
         }

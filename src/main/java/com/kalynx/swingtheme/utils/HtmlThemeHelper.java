@@ -21,6 +21,10 @@ public class HtmlThemeHelper {
         Pattern.compile("(?is)<style[^>]*>.*?</style>");
     private static final Pattern HEAD_BLOCK_PATTERN =
         Pattern.compile("(?is)<head[^>]*>.*?</head>");
+    private static final Pattern STYLE_ATTR_PATTERN =
+        Pattern.compile("(?i)\\s+style\\s*=\\s*\"[^\"]*\"");
+    private static final Pattern STYLE_ATTR_SINGLE_PATTERN =
+        Pattern.compile("(?i)\\s+style\\s*=\\s*'[^']*'");
 
     /**
      * Applies theme-aware styling to the given HTML content using the
@@ -130,6 +134,25 @@ public class HtmlThemeHelper {
      */
     public static String toHex(Color color) {
         return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
+    }
+
+    /**
+     * Strips all theme-applied styling from an HTML string, leaving only structural tags
+     * and text content. Removes the {@code <head>} section (which contains the stylesheet
+     * written by Swing's {@code HTMLWriter}) and all inline {@code style} attributes on
+     * elements. Safe to call before storing HTML to git and before loading HTML from git.
+     *
+     * @param html raw HTML that may contain embedded theme styles
+     * @return HTML with all styling removed, ready for storage or themed rendering
+     */
+    public static String stripStyles(String html) {
+        if (html == null || html.isEmpty()) {
+            return html;
+        }
+        html = HEAD_BLOCK_PATTERN.matcher(html).replaceAll("");
+        html = STYLE_ATTR_PATTERN.matcher(html).replaceAll("");
+        html = STYLE_ATTR_SINGLE_PATTERN.matcher(html).replaceAll("");
+        return html.trim();
     }
 
     private static String extractBodyContent(String content) {
