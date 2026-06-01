@@ -23,6 +23,20 @@ public class ComponentModel<T> {
         notifyChange();
     }
 
+    /**
+     * Sets the value and always notifies listeners, bypassing the equality check.
+     * Use this when the value may be structurally equal but listeners still need to react.
+     *
+     * @param value the new value to set
+     */
+    public synchronized void forceSetValue(T value) {
+        if (notifying) {
+            return;
+        }
+        this.value = value;
+        notifyChange();
+    }
+
     public synchronized void addChangeListener(Consumer<T> listener) {
         onChange.add(listener);
         listener.accept(value);
