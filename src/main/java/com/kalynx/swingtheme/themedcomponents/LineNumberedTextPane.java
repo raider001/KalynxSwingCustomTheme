@@ -204,6 +204,16 @@ public class LineNumberedTextPane extends ThemedPanel {
         lineNumberPanel.repaint();
     }
 
+    /**
+     * Mark a line as removed
+     */
+    public void markLineRemoved(int lineNumber) {
+        removedLines.add(lineNumber);
+        addedLines.remove(lineNumber);
+        modifiedLines.remove(lineNumber);
+        lineNumberPanel.repaint();
+    }
+
     public void clearLineIndicators() {
         addedLines.clear();
         removedLines.clear();

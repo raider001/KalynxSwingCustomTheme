@@ -4,6 +4,7 @@ import com.kalynx.swingtheme.theme.Theme;
 import com.kalynx.swingtheme.theme.ThemeManager;
 
 import javax.swing.*;
+import javax.swing.plaf.ScrollBarUI;
 import javax.swing.plaf.basic.BasicScrollBarUI;
 import java.awt.*;
 
@@ -66,14 +67,24 @@ public class ThemedScrollBar extends JScrollBar {
         ));
         setUI(new ModernScrollBarUI());
 
-        // Set faster scroll speeds (roughly 2x default)
-        setUnitIncrement(20);   // Mouse wheel scroll (default is ~10)
-        setBlockIncrement(100); // Page up/down and scrollbar click (default is ~50)
+        setUnitIncrement(20);
+        setBlockIncrement(100);
+
+        getModel().addChangeListener(_ -> repaint());
+    }
+
+    @Override
+    public void setUI(ScrollBarUI ui) {
+        // Only allow our custom UI — reject any L&F attempt to replace it
+        if (themeManager == null || ui instanceof ModernScrollBarUI) {
+            super.setUI(ui);
+        } else {
+            super.setUI(new ModernScrollBarUI());
+        }
     }
 
     @Override
     public void updateUI() {
-        // Override to prevent Look & Feel from changing our custom UI
         if (themeManager != null) {
             setUI(new ModernScrollBarUI());
         } else {
@@ -83,16 +94,75 @@ public class ThemedScrollBar extends JScrollBar {
 
     @Override
     protected void paintComponent(Graphics g) {
-        // Query theme on-demand
+        // Inherit the track colour from the parent scroll pane so the scrollbar
+        // automatically matches whatever background the container has been given
+        // (e.g. inputBackground in a combo popup vs backgroundColor elsewhere).
+        // Fall back to getBackground() when not yet attached to a parent.
+        java.awt.Container parent = getParent();
+        Color trackBg = (parent != null) ? parent.getBackground() : getBackground();
+        g.setColor(trackBg);
+        g.fillRect(0, 0, getWidth(), getHeight());
+
         Theme theme = themeManager.getCurrentTheme();
-        setBackground(theme.getBackgroundColor());
-        super.paintComponent(g);
+        Rectangle thumb = calcThumbBounds(getWidth(), getHeight());
+        if (thumb == null || thumb.isEmpty()) return;
+
+        Graphics2D g2 = (Graphics2D) g.create();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        int arc     = themeManager.scale(8);
+        int padding = themeManager.scale(2);
+        g2.setColor(theme.getBorderColor());
+        g2.fillRoundRect(
+            thumb.x + padding,
+            thumb.y + padding,
+            thumb.width  - 2 * padding,
+            thumb.height - 2 * padding,
+            arc, arc);
+        g2.dispose();
+    }
+
+    @Override
+    protected void paintChildren(Graphics g) {
+        // Suppress L&F arrow buttons — we paint everything in paintComponent
+    }
+
+    private Rectangle calcThumbBounds(int trackW, int trackH) {
+        javax.swing.BoundedRangeModel m = getModel();
+        int range = m.getMaximum() - m.getMinimum() - m.getExtent();
+        if (range <= 0) return null;
+
+        if (getOrientation() == VERTICAL) {
+            int thumbH = Math.max(themeManager.scale(20),
+                (int)((double) m.getExtent() / (m.getMaximum() - m.getMinimum()) * trackH));
+            int thumbY = (int)((double)(m.getValue() - m.getMinimum()) / range * (trackH - thumbH));
+            return new Rectangle(0, thumbY, trackW, thumbH);
+        } else {
+            int thumbW = Math.max(themeManager.scale(20),
+                (int)((double) m.getExtent() / (m.getMaximum() - m.getMinimum()) * trackW));
+            int thumbX = (int)((double)(m.getValue() - m.getMinimum()) / range * (trackW - thumbW));
+            return new Rectangle(thumbX, 0, thumbW, trackH);
+        }
     }
 
     /**
      * Modern, minimal scrollbar UI that queries theme on demand
      */
+    /** Forces our themed UI back onto this scrollbar — use after an L&F reset. */
+    public void applyTheme() {
+        setUI(new ModernScrollBarUI());
+    }
+
     private class ModernScrollBarUI extends BasicScrollBarUI {
+
+        @Override
+        protected void installDefaults() {
+            super.installDefaults();
+            // L&F sets white/system background and a native border in installDefaults —
+            // stamp our colours back over them immediately.
+            Theme theme = themeManager.getCurrentTheme();
+            scrollbar.setBackground(theme.getBackgroundColor());
+            scrollbar.setBorder(BorderFactory.createEmptyBorder());
+        }
 
         @Override
         protected void configureScrollBarColors() {

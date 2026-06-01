@@ -9,7 +9,11 @@ import com.kalynx.swingtheme.theme.ThemeManager;
 
 import javax.swing.*;
 import javax.swing.plaf.basic.BasicComboBoxUI;
+import javax.swing.plaf.basic.BasicComboPopup;
+import javax.swing.plaf.basic.ComboPopup;
 import java.awt.*;
+import java.awt.event.AWTEventListener;
+import java.awt.event.MouseEvent;
 import java.util.List;
 import java.util.Vector;
 
@@ -51,47 +55,27 @@ public class ThemedComboBox<T> extends JComboBox<T> {
         initialize();
     }
 
-    /**
-     * Initialize basic styling
-     */
     private void initialize() {
         setFont(new Font("Segoe UI", Font.PLAIN, themeManager.scale(12)));
         setRenderer(new ThemedComboBoxRenderer());
         setOpaque(true);
         setFocusable(true);
-
-        // Install custom UI that respects our theme colors
         setUI(new ThemedComboBoxUI());
-
         applyTheme();
     }
 
-    /**
-     * Apply theme colors to the combobox
-     */
     private void applyTheme() {
         Theme theme = themeManager.getCurrentTheme();
-
-        Color inputBg = theme.getInputBackground();
-        Color fg = theme.getForegroundColor();
-
-        // Set colors
-        setBackground(inputBg);
-        setForeground(fg);
+        setBackground(theme.getInputBackground());
+        setForeground(theme.getForegroundColor());
         setOpaque(true);
-
-        // No border for cleaner look
         setBorder(BorderFactory.createEmptyBorder(
-            themeManager.scale(2),
-            themeManager.scale(4),
-            themeManager.scale(2),
-            themeManager.scale(4)
-        ));
+            themeManager.scale(2), themeManager.scale(4),
+            themeManager.scale(2), themeManager.scale(4)));
     }
 
     @Override
     public void updateUI() {
-        // Override to prevent Look & Feel from changing our custom UI
         if (themeManager != null) {
             setUI(new ThemedComboBoxUI());
             SwingUtilities.invokeLater(this::applyTheme);
@@ -102,7 +86,6 @@ public class ThemedComboBox<T> extends JComboBox<T> {
 
     @Override
     protected void paintComponent(Graphics g) {
-        // Query theme colors on every paint for theme switching
         if (themeManager != null) {
             Theme theme = themeManager.getCurrentTheme();
             setBackground(theme.getInputBackground());
@@ -111,24 +94,20 @@ public class ThemedComboBox<T> extends JComboBox<T> {
         super.paintComponent(g);
     }
 
-    /**
-     * Custom UI for the combobox that respects theme colors
-     */
+    // -------------------------------------------------------------------------
+    // Custom UI
+    // -------------------------------------------------------------------------
+
     private class ThemedComboBoxUI extends BasicComboBoxUI {
+
         @Override
         protected JButton createArrowButton() {
-            // Create button with down arrow symbol that queries theme on every paint
             JButton button = new JButton("▼") {
                 @Override
                 public void paintComponent(Graphics g) {
-                    // Query theme colors on every paint for theme switching
                     Theme theme = themeManager.getCurrentTheme();
-
-                    // Paint button background
                     g.setColor(theme.getInputBackground());
                     g.fillRect(0, 0, getWidth(), getHeight());
-
-                    // Paint arrow text
                     g.setColor(theme.getForegroundColor());
                     g.setFont(getFont());
                     FontMetrics fm = g.getFontMetrics();
@@ -138,31 +117,151 @@ public class ThemedComboBox<T> extends JComboBox<T> {
                     g.drawString(text, x, y);
                 }
             };
-
-            button.setName("ComboBox.arrowButton"); // Important for UI delegate
+            button.setName("ComboBox.arrowButton");
             button.setFont(new Font("Segoe UI", Font.PLAIN, themeManager.scale(10)));
             button.setBorder(BorderFactory.createEmptyBorder());
             button.setFocusPainted(false);
-            button.setContentAreaFilled(false); // We paint manually
-            button.setOpaque(false); // We paint manually
+            button.setContentAreaFilled(false);
+            button.setOpaque(false);
             button.setMargin(new Insets(0, 0, 0, 0));
             button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-
             return button;
         }
 
         @Override
         public void paintCurrentValueBackground(Graphics g, Rectangle bounds, boolean hasFocus) {
-            // Paint themed background for the display area - query on every paint
             Theme theme = themeManager.getCurrentTheme();
             g.setColor(theme.getInputBackground());
             g.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
         }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        protected ComboPopup createPopup() {
+            return new ThemedComboPopup((JComboBox<Object>) comboBox);
+        }
     }
 
-    /**
-     * Simple themed renderer for dropdown items
-     */
+    // -------------------------------------------------------------------------
+    // Custom popup — JWindow-based so the Windows L&F never touches it
+    // -------------------------------------------------------------------------
+
+    private class ThemedComboPopup extends BasicComboPopup {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        private JWindow popupWindow;
+        private AWTEventListener outsideClickListener;
+
+        ThemedComboPopup(JComboBox<Object> combo) {
+            super(combo);
+        }
+
+        @Override
+        public void show() {
+            if (popupWindow == null) buildWindow();
+
+            int sel = comboBox.getSelectedIndex();
+            if (sel >= 0) {
+                list.setSelectedIndex(sel);
+                list.ensureIndexIsVisible(sel);
+            }
+
+            positionAndShow();
+
+            outsideClickListener = event -> {
+                if (event instanceof MouseEvent me && me.getID() == MouseEvent.MOUSE_PRESSED) {
+                    if (isVisible() && !popupWindow.getBounds().contains(me.getLocationOnScreen())) {
+                        SwingUtilities.invokeLater(this::hide);
+                    }
+                }
+            };
+            Toolkit.getDefaultToolkit().addAWTEventListener(
+                    outsideClickListener, AWTEvent.MOUSE_EVENT_MASK);
+        }
+
+        @Override
+        public void hide() {
+            if (popupWindow != null) popupWindow.setVisible(false);
+            if (outsideClickListener != null) {
+                Toolkit.getDefaultToolkit().removeAWTEventListener(outsideClickListener);
+                outsideClickListener = null;
+            }
+        }
+
+        @Override
+        public boolean isVisible() {
+            return popupWindow != null && popupWindow.isVisible();
+        }
+
+        private void buildWindow() {
+            Window owner = SwingUtilities.getWindowAncestor(comboBox);
+            popupWindow = new JWindow(owner);
+            popupWindow.setType(Window.Type.POPUP);
+            popupWindow.setFocusableWindowState(false);
+
+            Theme theme = themeManager.getCurrentTheme();
+            Color bg = theme.getInputBackground();
+
+            list.setBackground(bg);
+            list.setForeground(theme.getForegroundColor());
+            list.setSelectionBackground(theme.getAccentColor());
+            list.setSelectionForeground(Color.WHITE);
+
+            JScrollPane scrollPane = new JScrollPane(list,
+                    ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+                    ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+            ThemedScrollBar vScrollBar = new ThemedScrollBar(JScrollBar.VERTICAL);
+            scrollPane.setVerticalScrollBar(vScrollBar);
+            scrollPane.setBackground(bg);
+            scrollPane.getViewport().setBackground(bg);
+            scrollPane.setOpaque(true);
+            scrollPane.setBorder(BorderFactory.createLineBorder(theme.getBorderColor(), 1));
+
+            popupWindow.setContentPane(scrollPane);
+
+            list.addMouseListener(new java.awt.event.MouseAdapter() {
+                @Override
+                public void mouseReleased(java.awt.event.MouseEvent e) {
+                    int idx = list.locationToIndex(e.getPoint());
+                    if (idx >= 0) {
+                        comboBox.setSelectedIndex(idx);
+                        hide();
+                    }
+                }
+            });
+        }
+
+        private void positionAndShow() {
+            Point p = comboBox.getLocationOnScreen();
+            int w = comboBox.getWidth();
+            int rows = Math.min(comboBox.getMaximumRowCount(), list.getModel().getSize());
+            int cellH = estimateCellHeight();
+            int h = Math.max(rows * cellH, themeManager.scale(40));
+
+            int screenH = Toolkit.getDefaultToolkit().getScreenSize().height;
+            int yBelow = p.y + comboBox.getHeight();
+            int y = (yBelow + h <= screenH) ? yBelow : p.y - h;
+
+            popupWindow.setBounds(p.x, y, w, h);
+            popupWindow.setVisible(true);
+            popupWindow.toFront();
+        }
+
+        private int estimateCellHeight() {
+            int fixed = list.getFixedCellHeight();
+            if (fixed > 0) return fixed;
+            if (list.getModel().getSize() == 0) return themeManager.scale(24);
+            Component c = list.getCellRenderer().getListCellRendererComponent(
+                    list, list.getModel().getElementAt(0), 0, false, false);
+            return Math.max(c.getPreferredSize().height, themeManager.scale(24));
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Themed renderer
+    // -------------------------------------------------------------------------
+
     private class ThemedComboBoxRenderer extends DefaultListCellRenderer {
         @Serial
         private static final long serialVersionUID = 1L;
@@ -172,7 +271,6 @@ public class ThemedComboBox<T> extends JComboBox<T> {
                                                       int index, boolean isSelected, boolean cellHasFocus) {
             Theme theme = themeManager.getCurrentTheme();
 
-            // Theme the list itself
             if (list != null) {
                 list.setBackground(theme.getInputBackground());
                 list.setForeground(theme.getForegroundColor());
@@ -180,17 +278,14 @@ public class ThemedComboBox<T> extends JComboBox<T> {
                 list.setSelectionForeground(Color.WHITE);
             }
 
-            JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            JLabel label = (JLabel) super.getListCellRendererComponent(
+                    list, value, index, isSelected, cellHasFocus);
             label.setFont(new Font("Segoe UI", Font.PLAIN, themeManager.scale(12)));
             label.setBorder(BorderFactory.createEmptyBorder(
-                themeManager.scale(4),
-                themeManager.scale(8),
-                themeManager.scale(4),
-                themeManager.scale(8)
-            ));
+                themeManager.scale(4), themeManager.scale(8),
+                themeManager.scale(4), themeManager.scale(8)));
             label.setOpaque(true);
 
-            // Apply theme colors - MUST set after calling super
             if (isSelected) {
                 label.setBackground(theme.getAccentColor());
                 label.setForeground(Color.WHITE);
@@ -203,13 +298,15 @@ public class ThemedComboBox<T> extends JComboBox<T> {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Model binding
+    // -------------------------------------------------------------------------
+
     public void bindTo(ComponentModel<T> valueModel, ComponentModel<List<T>> optionsModel) {
         unbind();
         this.valueModel = valueModel;
         this.optionsModel = optionsModel;
-
         binding = BindingLifecycleHelper.setupComboBoxBinding(valueModel, optionsModel, this);
-
         BindingLifecycleHelper.setupAutoUnbind(this, this::unbind);
     }
 
@@ -220,24 +317,15 @@ public class ThemedComboBox<T> extends JComboBox<T> {
     public void unbind() {
         if (binding != null) {
             BindingLifecycleHelper.unbindComboBox(
-                valueModel,
-                optionsModel,
-                binding.valueChangeListener,
-                binding.optionsChangeListener,
-                this,
-                binding.selectionListener
-            );
+                valueModel, optionsModel,
+                binding.valueChangeListener, binding.optionsChangeListener,
+                this, binding.selectionListener);
         }
         valueModel = null;
         optionsModel = null;
         binding = null;
     }
 
-    /**
-     * Registers a {@link Runnable} as an action listener, ignoring the action event.
-     *
-     * @param action the action to run when the selection changes
-     */
     public void addActionListener(Runnable action) {
         addActionListener(_ -> action.run());
     }
